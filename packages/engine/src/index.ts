@@ -23,3 +23,6 @@ export {
 } from './engine';
 
 export { chooseAiMove } from './ai';
+
+export { boardScore, gameSummaryText } from './summary';
+export type { BoardScore, SummaryOptions } from './summary';
