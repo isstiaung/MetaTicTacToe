@@ -9,7 +9,7 @@ import {
   type GameState,
 } from '@mtt/engine';
 
-export type Mode = 'two-player' | 'vs-computer';
+export type Mode = 'two-player' | 'vs-computer' | 'online';
 
 /** Human is always X in vs-computer; the AI plays O. */
 const AI_PLAYER = 'O';

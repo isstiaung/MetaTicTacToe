@@ -22,6 +22,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "partykitHost": "127.0.0.1:1999"
     }
   }
 }
