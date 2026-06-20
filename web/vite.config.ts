@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       '@mtt/engine': path.resolve(__dirname, '../packages/engine/src/index.ts'),
       '@mtt/theme': path.resolve(__dirname, '../packages/theme/src/index.ts'),
+      '@mtt/protocol': path.resolve(__dirname, '../packages/protocol/src/index.ts'),
     },
   },
   server: {
