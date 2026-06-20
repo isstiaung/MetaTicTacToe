@@ -8,6 +8,11 @@ interface LandingProps {
   onChangeDifficulty: (d: Difficulty) => void;
   onStartTwoPlayer: () => void;
   onStartVsComputer: () => void;
+  /** Persisted display name used for online play. */
+  name: string;
+  onChangeName: (name: string) => void;
+  /** Open the online (internet PvP) menu. */
+  onPlayOnline: () => void;
 }
 
 export function Landing({
@@ -15,6 +20,9 @@ export function Landing({
   onChangeDifficulty,
   onStartTwoPlayer,
   onStartVsComputer,
+  name,
+  onChangeName,
+  onPlayOnline,
 }: LandingProps) {
   return (
     <main className="landing">
@@ -34,6 +42,22 @@ export function Landing({
         </button>
         <button type="button" className="btn btn--secondary" onClick={onStartVsComputer}>
           vs Computer
+        </button>
+
+        <label className="field">
+          <span className="field__label">Your name (for online play)</span>
+          <input
+            className="field__input"
+            type="text"
+            value={name}
+            maxLength={20}
+            placeholder="Player"
+            onChange={(e) => onChangeName(e.target.value)}
+          />
+        </label>
+
+        <button type="button" className="btn btn--secondary" onClick={onPlayOnline}>
+          Play Online
         </button>
 
         <div className="toggle" aria-label="Computer difficulty">

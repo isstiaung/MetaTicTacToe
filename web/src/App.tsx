@@ -4,12 +4,20 @@ import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';
 import { Landing } from './components/Landing';
 import { GameScreen } from './components/GameScreen';
 import { ResultModal } from './components/ResultModal';
+import { OnlineMenu } from './online/OnlineMenu';
+import { OnlineGame } from './online/OnlineGame';
+import {
+  generateRoomCode,
+  getStoredName,
+  normalizeRoomCode,
+  storeName,
+} from './online/useOnlineGame';
 import { installThemeVars } from './theme';
 
 installThemeVars();
 
-type Mode = 'two-player' | 'vs-computer';
-type Screen = 'landing' | 'game';
+type Mode = 'two-player' | 'vs-computer' | 'online';
+type Screen = 'landing' | 'game' | 'online-menu' | 'online-game';
 
 /** The human is always X when playing the computer. */
 const HUMAN: 'X' = 'X';
@@ -21,11 +29,15 @@ export function App() {
   const [state, setState] = useState<GameState>(createGame);
   const [thinking, setThinking] = useState(false);
 
+  // Online play: persisted display name + the active room code.
+  const [name, setName] = useState(getStoredName);
+  const [onlineCode, setOnlineCode] = useState('');
+
   // Bumped on every new game / mode change so an in-flight AI computation from
   // a previous game can detect it is stale and bail out before committing.
   const genRef = useRef(0);
 
-  const startGame = useCallback((nextMode: Mode) => {
+  const startGame = useCallback((nextMode: 'two-player' | 'vs-computer') => {
     genRef.current += 1;
     setMode(nextMode);
     setState(createGame());
@@ -43,6 +55,37 @@ export function App() {
     genRef.current += 1;
     setThinking(false);
     setScreen('landing');
+  }, []);
+
+  const changeName = useCallback((next: string) => {
+    setName(next);
+    storeName(next);
+  }, []);
+
+  const openOnlineMenu = useCallback(() => {
+    setMode('online');
+    setOnlineCode('');
+    setScreen('online-menu');
+  }, []);
+
+  // Host a new room: generate a short code, then connect (the hook joins on open).
+  const createOnline = useCallback(() => {
+    setOnlineCode(generateRoomCode());
+    setScreen('online-game');
+  }, []);
+
+  const joinOnline = useCallback((code: string) => {
+    const normalized = normalizeRoomCode(code);
+    if (!normalized) return;
+    setOnlineCode(normalized);
+    setScreen('online-game');
+  }, []);
+
+  // Leave the active room and return to the online menu (unmounts the hook,
+  // which sends `leave` and closes the socket).
+  const leaveOnline = useCallback(() => {
+    setOnlineCode('');
+    setScreen('online-menu');
   }, []);
 
   // Apply a human (or 2-player) move. Guarded by isLegalMove and the thinking
@@ -101,14 +144,33 @@ export function App() {
 
   return (
     <div className="app">
-      {screen === 'landing' ? (
+      {screen === 'landing' && (
         <Landing
           difficulty={difficulty}
           onChangeDifficulty={setDifficulty}
           onStartTwoPlayer={() => startGame('two-player')}
           onStartVsComputer={() => startGame('vs-computer')}
+          name={name}
+          onChangeName={changeName}
+          onPlayOnline={openOnlineMenu}
         />
-      ) : (
+      )}
+
+      {screen === 'online-menu' && (
+        <OnlineMenu
+          name={name}
+          onChangeName={changeName}
+          onCreate={createOnline}
+          onJoin={joinOnline}
+          onBack={goHome}
+        />
+      )}
+
+      {screen === 'online-game' && (
+        <OnlineGame code={onlineCode} name={name} onLeave={leaveOnline} />
+      )}
+
+      {screen === 'game' && (
         <>
           <GameScreen
             state={state}
