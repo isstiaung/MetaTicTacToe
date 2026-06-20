@@ -1,5 +1,7 @@
 import type { GameState, Player } from '@mtt/engine';
+import { boardScore } from '@mtt/engine';
 import { MetaBoard } from './MetaBoard';
+import { Score } from './Score';
 import { cn } from '../theme';
 
 interface GameScreenProps {
@@ -20,6 +22,32 @@ function TurnIndicator({ player }: { player: Player }) {
         {player}
       </span>
       <span>{player} to move</span>
+    </span>
+  );
+}
+
+/** When the game is over: "X wins! · X 4–2 O" (or the draw equivalent). */
+function ResultLine({ state }: { state: GameState }) {
+  const score = boardScore(state);
+  const label =
+    state.winner === 'draw' ? "It's a draw" : state.winner === 'X' ? 'X wins!' : 'O wins!';
+  return (
+    <span className="turn turn--result">
+      <span>{label}</span>
+      <span className="turn__dot" aria-hidden="true">
+        ·
+      </span>
+      <span className="score score--inline">
+        <span className="score__side score__side--X">
+          <span className="score__mark">X</span> {score.X}
+        </span>
+        <span className="score__sep" aria-hidden="true">
+          –
+        </span>
+        <span className="score__side score__side--O">
+          {score.O} <span className="score__mark">O</span>
+        </span>
+      </span>
     </span>
   );
 }
@@ -60,6 +88,7 @@ export function GameScreen({
           {modeLabel}
         </span>
         <div className="topbar__actions">
+          <Score state={state} />
           <button type="button" className="btn btn--ghost" onClick={onReset}>
             New game
           </button>
@@ -67,7 +96,11 @@ export function GameScreen({
       </div>
 
       <div className="status" aria-live="polite">
-        {!gameOver && <TurnIndicator player={state.currentPlayer} />}
+        {gameOver ? (
+          <ResultLine state={state} />
+        ) : (
+          <TurnIndicator player={state.currentPlayer} />
+        )}
         <span
           className={cn(
             'status__hint',
