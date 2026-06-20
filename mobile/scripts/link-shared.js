@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Link the shared monorepo source packages (@mtt/engine, @mtt/theme) into this
- * app's node_modules.
+ * Link the shared monorepo source packages (@mtt/engine, @mtt/theme,
+ * @mtt/protocol) into this app's node_modules.
  *
  * Why: this Expo app is intentionally NOT a member of the root npm `workspaces`
  * globs (it is a standalone app with its own node_modules). Expo therefore
@@ -23,6 +23,7 @@ const scopeDir = path.join(projectRoot, 'node_modules', '@mtt');
 const links = {
   engine: path.join(workspaceRoot, 'packages', 'engine'),
   theme: path.join(workspaceRoot, 'packages', 'theme'),
+  protocol: path.join(workspaceRoot, 'packages', 'protocol'),
 };
 
 fs.mkdirSync(scopeDir, { recursive: true });

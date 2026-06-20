@@ -9,6 +9,7 @@ import {
 import { palette, radius, space, typography } from '@mtt/theme';
 import type { Difficulty } from '@mtt/engine';
 import { Button } from '../components/Button';
+import { TextField } from '../components/TextField';
 import type { Mode } from '../useGame';
 
 const RULES_URL =
@@ -18,12 +19,20 @@ interface LandingScreenProps {
   difficulty: Difficulty;
   onChangeDifficulty: (d: Difficulty) => void;
   onStart: (mode: Mode) => void;
+  /** The player's display name (used by online play; persisted by the parent). */
+  name: string;
+  onChangeName: (name: string) => void;
+  /** Open the online menu. */
+  onStartOnline: () => void;
 }
 
 export function LandingScreen({
   difficulty,
   onChangeDifficulty,
   onStart,
+  name,
+  onChangeName,
+  onStartOnline,
 }: LandingScreenProps) {
   return (
     <View style={styles.container}>
@@ -71,6 +80,22 @@ export function LandingScreen({
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.onlineBlock}>
+          <Button
+            label="Online"
+            variant="secondary"
+            onPress={onStartOnline}
+          />
+          <TextField
+            value={name}
+            onChangeText={onChangeName}
+            placeholder="Your name (for online)"
+            maxLength={20}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
         </View>
       </View>
 
@@ -122,6 +147,9 @@ const styles = StyleSheet.create({
     gap: space.lg,
   },
   vsBlock: {
+    gap: space.md,
+  },
+  onlineBlock: {
     gap: space.md,
   },
   toggle: {

@@ -4,7 +4,8 @@
     "strict": true,
     "paths": {
       "@mtt/engine": ["../packages/engine/src/index.ts"],
-      "@mtt/theme": ["../packages/theme/src/index.ts"]
+      "@mtt/theme": ["../packages/theme/src/index.ts"],
+      "@mtt/protocol": ["../packages/protocol/src/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
