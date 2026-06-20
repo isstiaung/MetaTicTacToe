@@ -1,0 +1,14 @@
+{
+  "name": "metatictactoe-monorepo",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Ultimate / Meta Tic-Tac-Toe — a shared TypeScript engine powering web and mobile apps.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w @mtt/engine",
+    "test:engine": "npm run test -w @mtt/engine",
+    "typecheck": "npm run typecheck -w @mtt/engine && npm run typecheck -w @mtt/theme"
+  }
+}
