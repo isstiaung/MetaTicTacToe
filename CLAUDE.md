@@ -26,7 +26,7 @@ MetaTicTacToe/
 │  ├─ engine/            # @mtt/engine — pure TS rules + AI + vitest tests (NO UI imports)
 │  ├─ theme/             # @mtt/theme — shared modern-minimal design tokens
 │  ├─ protocol/          # @mtt/protocol — online wire types (types-only; reuses engine types)
-│  └─ party/             # @mtt/party — authoritative PartyKit server (reuses @mtt/engine) + tests
+│  └─ party/             # @mtt/party — Cloudflare Workers server (partyserver, reuses @mtt/engine) + tests
 ├─ web/                  # Vite + React + TS  (standalone; aliases the shared packages)
 └─ mobile/               # Expo React Native + TS, Android target (standalone; symlinks them)
 ```
@@ -79,15 +79,16 @@ the TS source:
 ## Online play (internet PvP)
 
 Online matches use an **authoritative server that reuses `@mtt/engine`** — the same rules run
-server-side, so clients can't cheat or desync. Transport is WebSockets via **PartyKit** (one
-"party" = one match room, keyed by a short room code).
+server-side, so clients can't cheat or desync. Transport is WebSockets on **Cloudflare Workers +
+Durable Objects** (via `partyserver`; one Durable Object = one match room, keyed by a short code).
 
 - **`@mtt/protocol`** is the shared wire contract (`ClientMessage` / `ServerMessage`, reusing the
   engine's `GameState`). The server and both clients import it.
 - **`@mtt/party`** (`packages/party`) is the server: `src/room.ts` is a **pure, unit-tested
   reducer** (seat assignment + reclaim-by-`playerId`, turn + legality via the engine, rematch,
-  disconnect); `src/server.ts` is a thin PartyKit adapter with storage-backed rooms. First joiner =
-  X, second = O, a third is rejected (`room_full`). The server is the **only writer** of
+  disconnect); `src/server.ts` is a thin Cloudflare Workers adapter (`partyserver`) with
+  Durable-Object-storage-backed rooms. First joiner = X, second = O, a third is rejected
+  (`room_full`). The server is the **only writer** of
   `GameState`; clients render the broadcast `sync` and never call `applyMove` online.
 - **Clients**: each app has a `useOnlineGame` hook (`web/src/online`, `mobile/src/online`) over
   `partysocket` (auto-reconnect — covers backgrounded phones). Players set a display name and get a
@@ -96,8 +97,8 @@ server-side, so clients can't cheat or desync. Transport is WebSockets via **Par
 - **Host config:** web reads `VITE_PARTYKIT_HOST` (default `127.0.0.1:1999`); mobile reads
   `app.json` `extra.partykitHost`. Local dev: web / iOS-sim use `127.0.0.1:1999`, the **Android
   emulator** uses `10.0.2.2:1999`, a **physical device** uses the dev machine's LAN IP. Deploy with
-  `npm run deploy -w @mtt/party` (owner's PartyKit login) and point the host at the `*.partykit.dev`
-  URL.
+  `npm run deploy -w @mtt/party` (`wrangler deploy`, owner's Cloudflare login) →
+  `metatictactoe.<account>.workers.dev`, and point the host there. See `DEPLOY.md`.
 
 Scoped out for now: random matchmaking, accounts, spectators, chat, match history.
 

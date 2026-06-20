@@ -1,0 +1,17 @@
+{
+  // Cloudflare Workers config. Deploys to https://metatictactoe.<account>.workers.dev
+  // (free; no custom domain needed). One Durable Object per match room.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "metatictactoe",
+  "main": "src/server.ts",
+  "compatibility_date": "2025-01-01",
+  "durable_objects": {
+    // Binding name "Main" -> partyserver maps it to the default party "main"
+    // that partysocket uses, so the clients connect unchanged.
+    "bindings": [{ "name": "Main", "class_name": "GameServer" }]
+  },
+  "migrations": [
+    // SQLite-backed Durable Objects: required for hibernation and available on the free plan.
+    { "tag": "v1", "new_sqlite_classes": ["GameServer"] }
+  ]
+}
