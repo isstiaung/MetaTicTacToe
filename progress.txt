@@ -59,6 +59,24 @@ MIGRATION COMPLETE — all steps done.
 Run apps:  cd web && npm run dev   |   cd mobile && npx expo start --android
 ==================================================================
 
+
+ONLINE PVP (internet multiplayer) — added after the migration
+==================================================================
+  [x] @mtt/protocol: shared wire types (ClientMessage/ServerMessage, reuses engine GameState)
+  [x] @mtt/party: PartyKit server — pure reduce() (seats + reclaim-by-playerId, turn+legality via
+        the engine, rematch, disconnect) + thin adapter; 11 vitest tests; typecheck; dev boots
+  [x] web/: useOnlineGame (partysocket), name field + Online menu/lobby/game, room codes;
+        build passes; E2E vs real server (seat assign, out-of-turn reject, reconnect, rematch)
+  [x] mobile/: useOnlineGame, Online screens, AsyncStorage name/playerId, metro+link-shared for
+        @mtt/protocol, app.json extra.partykitHost; tsc clean; expo export ok (597 modules)
+  [x] docs: CLAUDE.md + README updated (online architecture, server commands, host config)
+
+  Verification: engine 21 + party 11 tests green; all 4 packages typecheck; web build; mobile tsc.
+  Run server: npm run dev -w @mtt/party (127.0.0.1:1999)  |  deploy: npm run deploy -w @mtt/party
+  Host: web/iOS-sim 127.0.0.1:1999 ; Android emulator 10.0.2.2:1999 ; device = dev LAN IP.
+  Scoped out (future): random matchmaking, accounts, spectators, chat, match history.
+==================================================================
+
 Notes:
 - Rules source of truth: packages/engine (UIs must not re-implement rules).
 - status encoding from Java: X=1, O=0, empty=-1; boards/cells 0-8 row-major in TS port.
