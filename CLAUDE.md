@@ -11,7 +11,7 @@ in next.
 
 This repo is a **TypeScript monorepo**: one shared, framework-agnostic rules engine drives a
 **web** app and a **React Native (Expo)** app. The original native-Android (Java) app is archived
-under `android-old/`. Both apps support local 2-player and a vs-computer AI.
+under `android-old/`. Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
 
 ## Structure
 
@@ -24,7 +24,9 @@ MetaTicTacToe/
 ├─ android-old/          # ARCHIVED original Java/Android app — do not develop here
 ├─ packages/
 │  ├─ engine/            # @mtt/engine — pure TS rules + AI + vitest tests (NO UI imports)
-│  └─ theme/             # @mtt/theme — shared modern-minimal design tokens
+│  ├─ theme/             # @mtt/theme — shared modern-minimal design tokens
+│  ├─ protocol/          # @mtt/protocol — online wire types (types-only; reuses engine types)
+│  └─ party/             # @mtt/party — authoritative PartyKit server (reuses @mtt/engine) + tests
 ├─ web/                  # Vite + React + TS  (standalone; aliases the shared packages)
 └─ mobile/               # Expo React Native + TS, Android target (standalone; symlinks them)
 ```
@@ -74,13 +76,39 @@ the TS source:
   `postinstall` (`scripts/link-shared.js`) that symlinks the packages into `mobile/node_modules`
   (Expo scopes Metro's server to the app root, so the symlink is required); `tsconfig` `paths`.
 
+## Online play (internet PvP)
+
+Online matches use an **authoritative server that reuses `@mtt/engine`** — the same rules run
+server-side, so clients can't cheat or desync. Transport is WebSockets via **PartyKit** (one
+"party" = one match room, keyed by a short room code).
+
+- **`@mtt/protocol`** is the shared wire contract (`ClientMessage` / `ServerMessage`, reusing the
+  engine's `GameState`). The server and both clients import it.
+- **`@mtt/party`** (`packages/party`) is the server: `src/room.ts` is a **pure, unit-tested
+  reducer** (seat assignment + reclaim-by-`playerId`, turn + legality via the engine, rematch,
+  disconnect); `src/server.ts` is a thin PartyKit adapter with storage-backed rooms. First joiner =
+  X, second = O, a third is rejected (`room_full`). The server is the **only writer** of
+  `GameState`; clients render the broadcast `sync` and never call `applyMove` online.
+- **Clients**: each app has a `useOnlineGame` hook (`web/src/online`, `mobile/src/online`) over
+  `partysocket` (auto-reconnect — covers backgrounded phones). Players set a display name and get a
+  stable anonymous `playerId`, persisted locally (localStorage / AsyncStorage). The board
+  components are reused unchanged; online just feeds server state and locks input off-turn.
+- **Host config:** web reads `VITE_PARTYKIT_HOST` (default `127.0.0.1:1999`); mobile reads
+  `app.json` `extra.partykitHost`. Local dev: web / iOS-sim use `127.0.0.1:1999`, the **Android
+  emulator** uses `10.0.2.2:1999`, a **physical device** uses the dev machine's LAN IP. Deploy with
+  `npm run deploy -w @mtt/party` (owner's PartyKit login) and point the host at the `*.partykit.dev`
+  URL.
+
+Scoped out for now: random matchmaking, accounts, spectators, chat, match history.
+
 ## Commands
 
 | Task | Command |
 | --- | --- |
-| Install root (engine + theme) | `npm install` |
-| Engine tests | `npm test`  (→ vitest in `@mtt/engine`) |
-| Typecheck engine + theme | `npm run typecheck` |
+| Install root (shared packages) | `npm install` |
+| Tests (engine + party) | `npm test` |
+| Typecheck all packages | `npm run typecheck` |
+| Online server — dev / deploy | `npm run dev -w @mtt/party` (→ `127.0.0.1:1999`) · `npm run deploy -w @mtt/party` |
 | Web — dev / build | `cd web && npm run dev` · `npm run build` |
 | Mobile — dev / Android | `cd mobile && npx expo start` · `npx expo start --android` |
 | Mobile — typecheck / bundle check | `cd mobile && npm run typecheck` · `npx expo export --platform android` |
