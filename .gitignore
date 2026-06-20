@@ -13,6 +13,10 @@ web/dist/
 mobile/android/
 mobile/ios/
 
+# PartyKit (server dev cache / wrangler)
+.partykit/
+.wrangler/
+
 # Test / coverage
 coverage/
 
