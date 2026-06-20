@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Builds / bundler output
+dist/
+build/
+web/dist/
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+.expo-shared/
+mobile/android/
+mobile/ios/
+
+# Test / coverage
+coverage/
+
+# Caches
+.vite/
+.cache/
+
+# Misc
+*.log
+.DS_Store
+.env
+.env.local
+
+# Secrets / signing keys (never commit)
+*.keystore
+*.jks
+google-services.json
