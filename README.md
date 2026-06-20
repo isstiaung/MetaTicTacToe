@@ -39,7 +39,7 @@ MetaTicTacToe/
 │  ├─ engine/   # @mtt/engine   — pure-TS rules + AI (no UI), with vitest tests
 │  ├─ theme/    # @mtt/theme    — shared modern-minimal design tokens
 │  ├─ protocol/ # @mtt/protocol — online wire types (shared by server + clients)
-│  └─ party/    # @mtt/party    — authoritative PartyKit server (reuses the engine)
+│  └─ party/    # @mtt/party    — Cloudflare Workers server (partyserver, reuses the engine)
 ├─ web/         # Vite + React + TypeScript
 ├─ mobile/      # Expo (React Native) + TypeScript, Android target
 ├─ android-old/ # archived original Java/Android app (read-only history)
@@ -89,7 +89,8 @@ npm run typecheck  # typecheck engine + theme
 ## Online multiplayer
 
 Online matches run through a small **authoritative server that reuses `@mtt/engine`** (so the rules
-can't be cheated or desynced), over WebSockets on [PartyKit](https://www.partykit.io/) — one room
+can't be cheated or desynced), over WebSockets on **Cloudflare Workers + Durable Objects** (via
+[partyserver](https://github.com/cloudflare/partykit/tree/main/packages/partyserver)) — one room
 per match, keyed by a shareable code. Players set a display name; reconnect and rematch are built in.
 
 Run the server locally:
@@ -103,8 +104,8 @@ Point the clients at it:
 - **Web** — `VITE_PARTYKIT_HOST` (defaults to `127.0.0.1:1999`). Open two tabs → Create in one, Join with the code in the other.
 - **Mobile** — `app.json` → `expo.extra.partykitHost`. Web / iOS-sim use `127.0.0.1:1999`, the **Android emulator** uses `10.0.2.2:1999`, and a **physical device** needs the dev machine's LAN IP.
 
-Deploy on the free hobby tier with `npm run deploy -w @mtt/party` (your PartyKit login), then set the
-host values to the resulting `*.partykit.dev` URL.
+Deploy to your own Cloudflare account (free) with `npm run deploy -w @mtt/party` (`wrangler deploy`),
+then set the host values to the resulting `*.workers.dev` URL. See [`DEPLOY.md`](DEPLOY.md).
 
 ## Architecture
 
