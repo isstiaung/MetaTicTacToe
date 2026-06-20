@@ -16,7 +16,7 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// --- Shared source packages (@mtt/engine, @mtt/theme) ------------------------
+// --- Shared source packages (@mtt/engine, @mtt/theme, @mtt/protocol) ---------
 // These are plain TS source packages with no build step. This app is a
 // STANDALONE Expo app (not a member of the root npm `workspaces` globs), so
 // Expo roots Metro's file map / server at `mobile/` and scopes file access
@@ -33,6 +33,7 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   '@mtt/engine': path.resolve(workspaceRoot, 'packages/engine'),
   '@mtt/theme': path.resolve(workspaceRoot, 'packages/theme'),
+  '@mtt/protocol': path.resolve(workspaceRoot, 'packages/protocol'),
 };
 
 // The shared packages declare `"exports": { ".": "./src/index.ts" }`. Metro's
