@@ -1,12 +1,22 @@
-import { useEffect, useRef } from 'react';
-import type { Outcome } from '@mtt/engine';
+import { useEffect, useRef, useState } from 'react';
+import type { GameState, Outcome } from '@mtt/engine';
+import { boardScore, gameSummaryText } from '@mtt/engine';
 import { cn } from '../theme';
 
 interface ResultModalProps {
   /** A decided outcome: 'X', 'O', or 'draw'. Caller only renders when decided. */
   outcome: Exclude<Outcome, null>;
+  /** The finished game state — used for the score and the shareable summary. */
+  state: GameState;
   onPlayAgain: () => void;
   onHome: () => void;
+  /** Dismiss the dialog without ending interaction; the finished board shows. */
+  onDismiss: () => void;
+  /**
+   * Display names for the share summary (online play). Omitted for local play,
+   * where the summary defaults to "X" / "O".
+   */
+  players?: { X?: string; O?: string };
   /**
    * Optional override for the primary action label (e.g. "Rematch" online).
    * Defaults to "Play again" for local play.
@@ -22,17 +32,32 @@ interface ResultModalProps {
 
 export function ResultModal({
   outcome,
+  state,
   onPlayAgain,
   onHome,
+  onDismiss,
+  players,
   playAgainLabel = 'Play again',
   pendingNote,
 }: ResultModalProps) {
   const playAgainRef = useRef<HTMLButtonElement>(null);
+  const [copied, setCopied] = useState(false);
 
   // Pull focus to the primary action when the result appears.
   useEffect(() => {
     playAgainRef.current?.focus();
   }, []);
+
+  // Escape dismisses the dialog (revealing the finished board).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onDismiss]);
+
+  const score = boardScore(state);
 
   const title =
     outcome === 'draw' ? "It's a draw" : outcome === 'X' ? 'X wins!' : 'O wins!';
@@ -42,9 +67,44 @@ export function ResultModal({
       : 'Three claimed squares in a line.';
   const glyph = outcome === 'draw' ? 'Draw' : outcome;
 
+  const handleShare = async () => {
+    const text = gameSummaryText(state, { players, url: window.location.origin });
+    // Prefer the native share sheet; fall back to copying to the clipboard.
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        // User cancelled or share failed — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — nothing more we can do.
+    }
+  };
+
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal">
+    <div
+      className="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onDismiss}
+    >
+      {/* Stop clicks inside the card from bubbling to the backdrop handler. */}
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="btn btn--ghost modal__close"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+        >
+          &times;
+        </button>
         <span
           className={cn(
             'modal__glyph',
@@ -58,6 +118,17 @@ export function ResultModal({
         </span>
         <h2 className="modal__title">{title}</h2>
         <p className="modal__sub">{sub}</p>
+        <p className="modal__score" aria-label={`Boards won — X ${score.X}, O ${score.O}`}>
+          <span className="score__side score__side--X">
+            <span className="score__mark">X</span> {score.X}
+          </span>
+          <span className="score__sep" aria-hidden="true">
+            –
+          </span>
+          <span className="score__side score__side--O">
+            {score.O} <span className="score__mark">O</span>
+          </span>
+        </p>
         <div className="modal__actions">
           <button
             ref={playAgainRef}
@@ -67,6 +138,9 @@ export function ResultModal({
             disabled={pendingNote !== undefined}
           >
             {playAgainLabel}
+          </button>
+          <button type="button" className="btn btn--secondary" onClick={handleShare}>
+            {copied ? 'Copied!' : 'Share'}
           </button>
           <button type="button" className="btn btn--ghost" onClick={onHome}>
             Back to menu

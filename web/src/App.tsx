@@ -28,6 +28,8 @@ export function App() {
   const [difficulty, setDifficulty] = useState<Difficulty>('hard');
   const [state, setState] = useState<GameState>(createGame);
   const [thinking, setThinking] = useState(false);
+  // Whether the player has dismissed the result dialog (game stays over).
+  const [resultDismissed, setResultDismissed] = useState(false);
 
   // Online play: persisted display name + the active room code.
   const [name, setName] = useState(getStoredName);
@@ -42,6 +44,7 @@ export function App() {
     setMode(nextMode);
     setState(createGame());
     setThinking(false);
+    setResultDismissed(false);
     setScreen('game');
   }, []);
 
@@ -49,6 +52,7 @@ export function App() {
     genRef.current += 1;
     setState(createGame());
     setThinking(false);
+    setResultDismissed(false);
   }, []);
 
   const goHome = useCallback(() => {
@@ -180,8 +184,14 @@ export function App() {
             onReset={resetGame}
             onHome={goHome}
           />
-          {result !== null && (
-            <ResultModal outcome={result} onPlayAgain={resetGame} onHome={goHome} />
+          {result !== null && !resultDismissed && (
+            <ResultModal
+              outcome={result}
+              state={state}
+              onPlayAgain={resetGame}
+              onHome={goHome}
+              onDismiss={() => setResultDismissed(true)}
+            />
           )}
         </>
       )}

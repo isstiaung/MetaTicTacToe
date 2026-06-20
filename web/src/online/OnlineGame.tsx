@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { isLegalMove } from '@mtt/engine';
+import { useEffect, useState } from 'react';
+import { boardScore, isLegalMove } from '@mtt/engine';
 import type { Outcome } from '@mtt/engine';
 import type { RoomPlayers, Seat } from '@mtt/protocol';
 import { MetaBoard } from '../components/MetaBoard';
 import { ResultModal } from '../components/ResultModal';
+import { Score } from '../components/Score';
 import { useOnlineGame } from './useOnlineGame';
 import { cn } from '../theme';
 
@@ -51,6 +52,12 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
   const game = useOnlineGame(code, name);
   const { state, status, you, players, rematch, connected, error, sendMove, sendRematch } = game;
   const [copied, setCopied] = useState(false);
+  // Whether the player dismissed the result dialog; reset when a new game
+  // (rematch) begins, i.e. once the board no longer has a winner.
+  const [resultDismissed, setResultDismissed] = useState(false);
+  useEffect(() => {
+    if (state.winner === null) setResultDismissed(false);
+  }, [state.winner]);
 
   const copyCode = async () => {
     try {
@@ -144,6 +151,12 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
   const iRequestedRematch = rematch[you];
   const pendingNote = iRequestedRematch ? 'Waiting for opponent to accept' : undefined;
 
+  // End-of-game header readout and the names used for the share summary.
+  const metaScore = boardScore(state);
+  const resultLabel =
+    state.winner === 'draw' ? "It's a draw" : state.winner === 'X' ? 'X wins!' : 'O wins!';
+  const shareNames = { X: players.X?.name, O: players.O?.name };
+
   return (
     <main className="game">
       <div className="topbar">
@@ -153,7 +166,9 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
         <span className="topbar__mode" style={{ color: 'var(--mtt-muted)', fontSize: 'var(--mtt-size-sm)' }}>
           Online · {code}
         </span>
-        <div className="topbar__actions" />
+        <div className="topbar__actions">
+          <Score state={state} />
+        </div>
       </div>
 
       <div className="players" aria-label="Players">
@@ -175,6 +190,25 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
       </div>
 
       <div className="status" aria-live="polite">
+        {gameOver && (
+          <span className="turn turn--result">
+            <span>{resultLabel}</span>
+            <span className="turn__dot" aria-hidden="true">
+              ·
+            </span>
+            <span className="score score--inline">
+              <span className="score__side score__side--X">
+                <span className="score__mark">X</span> {metaScore.X}
+              </span>
+              <span className="score__sep" aria-hidden="true">
+                –
+              </span>
+              <span className="score__side score__side--O">
+                {metaScore.O} <span className="score__mark">O</span>
+              </span>
+            </span>
+          </span>
+        )}
         <span className="status__hint">{hint}</span>
         {statusNote && (
           <span className="status__hint" style={{ color: 'var(--mtt-danger)', fontWeight: 600 }}>
@@ -190,11 +224,14 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
 
       <MetaBoard state={state} locked={locked} onPlay={handlePlay} />
 
-      {gameOver && (
+      {gameOver && !resultDismissed && (
         <ResultModal
           outcome={state.winner as Exclude<Outcome, null>}
+          state={state}
+          players={shareNames}
           onPlayAgain={sendRematch}
           onHome={onLeave}
+          onDismiss={() => setResultDismissed(true)}
           playAgainLabel="Rematch"
           pendingNote={pendingNote}
         />

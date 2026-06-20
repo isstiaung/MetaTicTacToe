@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,9 +10,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { palette, radius, shadow, space, typography } from '@mtt/theme';
-import type { Player } from '@mtt/engine';
+import { boardScore, type Player } from '@mtt/engine';
 import { MetaBoard } from '../components/MetaBoard';
 import { ResultOverlay } from '../components/ResultOverlay';
+import { Score } from '../components/Score';
 import { Button } from '../components/Button';
 import { useOnlineGame } from '../online/useOnlineGame';
 
@@ -39,6 +40,13 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
 
   const { width } = useWindowDimensions();
   const boardWidth = Math.min(width - space.lg * 2, 440);
+
+  // Whether the user has dismissed the end-of-game overlay (game stays over).
+  // Resets automatically once a rematch starts (the winner clears).
+  const [resultDismissed, setResultDismissed] = useState(false);
+  useEffect(() => {
+    if (!state.winner) setResultDismissed(false);
+  }, [state.winner]);
 
   const handleHome = useCallback(() => {
     leave();
@@ -110,15 +118,23 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
   if (!connected) connNote = 'Reconnecting…';
   else if (opponent && !opponent.connected) connNote = 'Opponent disconnected…';
 
+  // When over, surface the result + score (e.g. "Alice (X) wins! · X 4–2 O").
+  const score = boardScore(state);
+  let resultText: string | null = null;
+  if (state.winner === 'draw') resultText = 'Draw';
+  else if (state.winner === 'X') resultText = `${nameOf('X')} wins!`;
+  else if (state.winner === 'O') resultText = `${nameOf('O')} wins!`;
+  const overLine = resultText ? `${resultText} · X ${score.X}–${score.O} O` : null;
+
   const forced = state.activeBoard !== null && !state.winner;
   let statusLine: string;
-  if (state.winner) statusLine = 'Game over';
+  if (overLine) statusLine = overLine;
   else if (!you) statusLine = 'Joining…';
   else if (yourTurn) statusLine = forced ? 'Play in the highlighted board' : 'Play anywhere';
   else statusLine = `Waiting for ${opponentSeat ? nameOf(opponentSeat) : 'opponent'}…`;
 
-  const turnText = state.winner
-    ? 'Game over'
+  const turnText = resultText
+    ? resultText
     : yourTurn
       ? 'Your move'
       : `${current === you ? 'You' : nameOf(current)} to move`;
@@ -141,9 +157,7 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
           active={current === 'X' && !state.winner}
           connected={players.X?.connected ?? false}
         />
-        <Text style={styles.vsText} allowFontScaling={false}>
-          vs
-        </Text>
+        <Score state={state} />
         <SeatBadge
           label={nameOf('O')}
           seat="O"
@@ -156,12 +170,20 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
 
       {/* Turn indicator + status */}
       <View style={styles.statusBlock}>
-        <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
-          <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
-          <Text style={[styles.turnText, { color: turnColor }]} allowFontScaling={false}>
-            {turnText}
-          </Text>
-        </View>
+        {state.winner ? (
+          <View style={[styles.turnPill, { backgroundColor: palette.surfaceAlt }]}>
+            <Text style={[styles.turnText, { color: palette.ink }]} allowFontScaling={false}>
+              {turnText}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
+            <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
+            <Text style={[styles.turnText, { color: turnColor }]} allowFontScaling={false}>
+              {turnText}
+            </Text>
+          </View>
+        )}
         <Text style={styles.statusText} allowFontScaling={false}>
           {connNote ?? statusLine}
         </Text>
@@ -183,9 +205,12 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
       {/* Result + rematch. The "Play again" button asks for a rematch; once we've
           asked (but the opponent hasn't), a pending notice layers over the overlay. */}
       <ResultOverlay
-        winner={state.winner}
+        winner={resultDismissed ? null : state.winner}
+        state={state}
+        players={{ X: players.X?.name, O: players.O?.name }}
         onPlayAgain={sendRematch}
         onHome={handleHome}
+        onDismiss={() => setResultDismissed(true)}
       />
       <Modal
         visible={Boolean(state.winner) && rematchPending}
@@ -346,11 +371,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: space.sm,
     marginBottom: space.md,
-  },
-  vsText: {
-    fontSize: typography.size.sm,
-    color: palette.muted,
-    fontWeight: typography.weight.medium as TextStyle['fontWeight'],
   },
   seatBadge: {
     flex: 1,
