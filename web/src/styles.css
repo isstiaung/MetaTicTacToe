@@ -309,6 +309,53 @@ a {
   min-height: 1.2em;
 }
 
+.turn--result {
+  font-size: var(--mtt-size-md);
+}
+
+.turn__dot {
+  color: var(--mtt-muted);
+}
+
+/* ---------- Score readout ---------- */
+
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mtt-size-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--mtt-ink-soft);
+}
+
+.score--inline {
+  font-size: inherit;
+  font-weight: 700;
+}
+
+.score__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.score__side--X {
+  color: var(--mtt-x);
+}
+
+.score__side--O {
+  color: var(--mtt-o);
+}
+
+.score__mark {
+  font-weight: 700;
+}
+
+.score__sep {
+  color: var(--mtt-muted);
+}
+
 .status__hint--thinking {
   color: var(--mtt-o);
   font-weight: 600;
@@ -507,6 +554,7 @@ a {
 }
 
 .modal {
+  position: relative;
   width: 100%;
   max-width: 360px;
   background: var(--mtt-surface);
@@ -519,6 +567,28 @@ a {
   align-items: center;
   gap: var(--mtt-space-lg);
   animation: modal-in var(--mtt-slow) var(--mtt-ease);
+}
+
+.modal__close {
+  position: absolute;
+  top: var(--mtt-space-sm);
+  right: var(--mtt-space-sm);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: var(--mtt-size-lg);
+  line-height: 1;
+  border-radius: var(--mtt-radius-pill);
+}
+
+.modal__score {
+  margin: calc(-1 * var(--mtt-space-sm)) 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mtt-space-sm);
+  font-size: var(--mtt-size-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes modal-in {
