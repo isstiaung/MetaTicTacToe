@@ -5,26 +5,32 @@ first**. Everything here fits free hobby tiers (the only optional cost is the Pl
 one-time $25, and only when you ship mobile).
 
 ```
-1. PartyKit server  ──▶  wss://metatictactoe.<account>.partykit.dev
+1. Workers server   ──▶  wss://metatictactoe.<account>.workers.dev
 2. Web app          ──▶  static site (Cloudflare Pages); server host baked in at BUILD time
 3. Mobile app       ──▶  later
 ```
 
-## 1. Server — PartyKit (deploy first)
+## 1. Server — Cloudflare Workers (deploy first)
 
-The authoritative game server (`@mtt/party`). Needs your PartyKit / Cloudflare login.
+The authoritative game server (`@mtt/party`) runs on **Cloudflare Workers + Durable Objects**
+(via [`partyserver`](https://github.com/cloudflare/partykit/tree/main/packages/partyserver)).
+Deploys to your own Cloudflare account — free, no custom domain needed.
 
 ```bash
-cd packages/party
-npx partykit login            # GitHub auth
-npm run deploy -w @mtt/party  # project name "metatictactoe" comes from partykit.json
+npx wrangler login            # opens a browser; authorize Cloudflare
+npm run deploy -w @mtt/party  # = wrangler deploy (config in packages/party/wrangler.jsonc)
 ```
 
-You'll get a host like **`metatictactoe.<account>.partykit.dev`** (HTTPS + WSS included). Use
-that as the host value for the clients below. Free at hobby scale.
+You'll get a host like **`metatictactoe.<account>.workers.dev`** (HTTPS + WSS included). Use that
+as the host value for the clients below. Durable Objects (SQLite-backed, with hibernation) are on
+the free plan, so idle rooms cost ~nothing.
 
-> PartyKit is now part of Cloudflare — confirm the current deploy command and free-tier terms
-> when you log in.
+Local dev: `npm run dev -w @mtt/party` runs `wrangler dev` on `127.0.0.1:1999` (matching the
+clients' default host).
+
+> Why not the hosted `*.partykit.dev`? That shared zone has hit Cloudflare's custom-domain limit,
+> so new projects can't deploy there — running on your own Workers account is the supported path
+> and is free. The game logic (`room.ts`) and both clients are unchanged.
 
 ## 2. Web — Cloudflare Pages
 
