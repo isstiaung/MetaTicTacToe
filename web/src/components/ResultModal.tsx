@@ -7,9 +7,26 @@ interface ResultModalProps {
   outcome: Exclude<Outcome, null>;
   onPlayAgain: () => void;
   onHome: () => void;
+  /**
+   * Optional override for the primary action label (e.g. "Rematch" online).
+   * Defaults to "Play again" for local play.
+   */
+  playAgainLabel?: string;
+  /**
+   * When set (online play), this note appears under the actions — e.g.
+   * "Waiting for opponent to accept…". Disables the primary button so the
+   * player can't double-request a rematch.
+   */
+  pendingNote?: string;
 }
 
-export function ResultModal({ outcome, onPlayAgain, onHome }: ResultModalProps) {
+export function ResultModal({
+  outcome,
+  onPlayAgain,
+  onHome,
+  playAgainLabel = 'Play again',
+  pendingNote,
+}: ResultModalProps) {
   const playAgainRef = useRef<HTMLButtonElement>(null);
 
   // Pull focus to the primary action when the result appears.
@@ -47,12 +64,16 @@ export function ResultModal({ outcome, onPlayAgain, onHome }: ResultModalProps) 
             type="button"
             className="btn btn--primary"
             onClick={onPlayAgain}
+            disabled={pendingNote !== undefined}
           >
-            Play again
+            {playAgainLabel}
           </button>
           <button type="button" className="btn btn--ghost" onClick={onHome}>
             Back to menu
           </button>
+          {pendingNote !== undefined && (
+            <p className="modal__pending thinking-dots">{pendingNote}</p>
+          )}
         </div>
       </div>
     </div>
