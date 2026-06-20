@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Shared packages (engine, theme, protocol, party): tests + typecheck.
+      - name: Install root workspaces
+        run: npm ci
+      - name: Test (engine + party)
+        run: npm test
+      - name: Typecheck all packages
+        run: npm run typecheck
+
+      # Web app is standalone (its own lockfile); build it as a gate.
+      - name: Install web
+        run: npm ci --prefix web
+      - name: Build web
+        run: npm run build --prefix web
