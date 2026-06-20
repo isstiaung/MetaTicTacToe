@@ -1,0 +1,64 @@
+MetaTicTacToe — Migration Progress
+===================================
+Goal: port the native Android (Java) app to a TS monorepo with a shared engine
+powering a Web (Vite+React) app and a Mobile (Expo RN) app; modern-minimal design;
+add an AI opponent; archive the original under android-old/.
+
+Legend: [ ] todo   [~] in progress   [x] done
+
+STEP A — Document + archive
+  [x] Write initial CLAUDE.md (explainer of current app + migration target)
+  [x] Create progress.txt
+  [x] Move Android app + build files into android-old/ (git mv, 45 renames detected)
+
+STEP B — Monorepo + shared engine  [DONE]
+  [x] Root package.json (npm workspaces: packages/*)
+  [x] New root .gitignore (node, dist, .expo) + tsconfig.base.json
+  [x] packages/engine (@mtt/engine): types, createGame, applyMove, getLegalMoves,
+      lineWinner, metaCells, allowedBoards, isLegalMove
+  [x] packages/engine AI: chooseAiMove (easy = random+win-grab, hard = minimax+alpha-beta)
+  [x] packages/engine vitest tests: 21 passing (win-check, routing + free-move, meta-win/draw,
+      legality, AI legality across a full self-play game)
+  [x] packages/theme (@mtt/theme): palette, spacing, radii, type scale, motion, shadows
+  [x] engine + theme typecheck clean
+  NOTE: apps consume the shared packages via path alias to ../packages/<pkg>/src
+        (Vite resolve.alias + tsconfig paths; Metro watchFolders + extraNodeModules) —
+        more robust than npm-symlink workspaces with Expo/Metro.
+
+STEP C — Apps (parallel)
+  [x] web/ (Vite+React+TS): landing / game / win; 2-player + vs-computer; modern-minimal
+        - build passes (tsc -b + vite build), dev server boots; engine/theme via alias
+        - accessible (buttons, aria-live, focus mgmt, reduced-motion) + responsive
+        - run: cd web && npm run dev   |  build: npm run build
+  [x] mobile/ (Expo RN+TS): same screens + features; metro workspace config
+        - tsc --noEmit clean; `expo export --platform android` ok (1.6MB Hermes, 576 modules)
+        - shared pkgs linked via postinstall symlink (scripts/link-shared.js) + metro watchFolders
+        - android.package me.isstiaung.metatictactoe; run: cd mobile && npx expo start --android
+
+STEP D — Polish + finalize  [DONE]
+  [x] Consistent modern-minimal polish: refined @mtt/theme tokens once (cooler "paper"
+      neutrals + crisper cool shadows; indigo-X / emerald-O accents kept) — propagates to
+      both apps via shared tokens. Removed stray Expo-template files from mobile/
+      (CLAUDE.md, AGENTS.md, LICENSE, .claude/).
+  [x] Rewrite CLAUDE.md for final monorepo (structure, engine API, rules, design, commands)
+  [x] Mark this file complete
+
+VERIFICATION  [ALL GREEN — re-run after the token refinement]
+  [x] engine: vitest 21/21 passing; engine + theme typecheck clean
+  [x] web: `npm run build` passes (tsc -b + vite, 43 modules, dist emitted); dev server boots;
+        2-player + vs-computer wired through the engine; accessible + responsive
+  [x] mobile: `tsc --noEmit` clean; `expo export --platform android` ok (Hermes bundle, 576
+        modules); shared packages resolve via metro watchFolders + postinstall symlink
+
+==================================================================
+MIGRATION COMPLETE — all steps done.
+  - Original Java/Android app archived under android-old/ (git history preserved, 45 renames).
+  - Shared @mtt/engine (rules + AI, tested) and @mtt/theme (design tokens).
+  - web/  : Vite + React + TS.
+  - mobile/: Expo React Native + TS (Android).
+Run apps:  cd web && npm run dev   |   cd mobile && npx expo start --android
+==================================================================
+
+Notes:
+- Rules source of truth: packages/engine (UIs must not re-implement rules).
+- status encoding from Java: X=1, O=0, empty=-1; boards/cells 0-8 row-major in TS port.
