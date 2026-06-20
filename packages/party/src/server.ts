@@ -1,34 +1,53 @@
 /**
- * PartyKit adapter. One instance of this class == one match room (a Durable Object).
+ * Cloudflare Workers adapter (via partyserver). One Durable Object instance == one match room.
  *
- * It is intentionally thin: it parses messages, delegates all decisions to the pure `reduce`
- * in `room.ts` (which reuses `@mtt/engine`), persists the room so it survives brief eviction,
- * and fans out replies/broadcasts. All the testable logic lives in `room.ts`.
+ * It stays intentionally thin: it parses messages, delegates every decision to the pure `reduce`
+ * in `room.ts` (which reuses `@mtt/engine`), persists the room to DO storage so it survives
+ * hibernation/eviction, and fans out replies/broadcasts. All testable logic lives in `room.ts`.
+ *
+ * The Durable Object binding is named `Main`, which partyserver maps to the default party "main"
+ * that partysocket uses — so the web and mobile clients connect unchanged.
  */
-import type * as Party from 'partykit/server';
+import { Server, routePartykitRequest } from 'partyserver';
+import type { Connection } from 'partyserver';
 import type { ClientMessage } from '@mtt/protocol';
 import { createRoom, disconnect, reduce, syncMessage, type RoomState } from './room';
 
-export default class GameServer implements Party.Server {
-  private room: RoomState;
-  /** Maps an open connection to the player id it joined with. */
-  private playerIdByConn = new Map<string, string>();
+interface Env {
+  Main: DurableObjectNamespace;
+}
 
-  constructor(readonly party: Party.Room) {
-    this.room = createRoom(party.id);
+/** Per-connection state (survives WebSocket hibernation). */
+interface ConnState {
+  playerId?: string;
+}
+
+export class GameServer extends Server<Env> {
+  // Hibernate idle rooms so two players thinking between moves cost ~nothing.
+  static options = { hibernate: true };
+
+  private room?: RoomState;
+
+  private async getRoom(): Promise<RoomState> {
+    if (!this.room) {
+      this.room = (await this.ctx.storage.get<RoomState>('room')) ?? createRoom(this.name);
+    }
+    return this.room;
   }
 
-  async onStart() {
-    const saved = await this.party.storage.get<RoomState>('room');
-    if (saved) this.room = saved;
+  private async persist(): Promise<void> {
+    if (this.room) await this.ctx.storage.put('room', this.room);
   }
 
-  onConnect(conn: Party.Connection) {
+  async onConnect(conn: Connection<ConnState>) {
+    const room = await this.getRoom();
     // Send the current shared state right away; the client then sends `join` to claim a seat.
-    conn.send(JSON.stringify(syncMessage(this.room)));
+    conn.send(JSON.stringify(syncMessage(room)));
   }
 
-  async onMessage(raw: string, sender: Party.Connection) {
+  async onMessage(sender: Connection<ConnState>, raw: string | ArrayBuffer) {
+    if (typeof raw !== 'string') return;
+
     let msg: ClientMessage;
     try {
       msg = JSON.parse(raw) as ClientMessage;
@@ -39,33 +58,35 @@ export default class GameServer implements Party.Server {
       return;
     }
 
-    const connPlayerId =
-      msg.type === 'join' ? msg.playerId : this.playerIdByConn.get(sender.id);
+    const room = await this.getRoom();
+    const connPlayerId = msg.type === 'join' ? msg.playerId : sender.state?.playerId;
 
-    const result = reduce(this.room, connPlayerId, msg);
+    const result = reduce(room, connPlayerId, msg);
     this.room = result.room;
 
     // Bind the connection to its player id once a join is accepted (an `assigned` reply).
     if (msg.type === 'join' && result.reply.some((m) => m.type === 'assigned')) {
-      this.playerIdByConn.set(sender.id, msg.playerId);
+      sender.setState({ playerId: msg.playerId });
     }
 
     for (const m of result.reply) sender.send(JSON.stringify(m));
-    if (result.broadcast) this.party.broadcast(JSON.stringify(syncMessage(this.room)));
+    if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
   }
 
-  async onClose(conn: Party.Connection) {
-    const playerId = this.playerIdByConn.get(conn.id);
-    this.playerIdByConn.delete(conn.id);
+  async onClose(conn: Connection<ConnState>) {
+    const playerId = conn.state?.playerId;
     if (!playerId) return;
-    const result = disconnect(this.room, playerId);
+    const room = await this.getRoom();
+    const result = disconnect(room, playerId);
     this.room = result.room;
-    if (result.broadcast) this.party.broadcast(JSON.stringify(syncMessage(this.room)));
+    if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
-  }
-
-  private async persist() {
-    await this.party.storage.put('room', this.room);
   }
 }
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return (await routePartykitRequest(request, env)) || new Response('Not Found', { status: 404 });
+  },
+} satisfies ExportedHandler<Env>;

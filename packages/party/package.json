@@ -3,21 +3,23 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Authoritative PartyKit server for online MetaTicTacToe. One party = one match.",
+  "description": "Authoritative game server for online MetaTicTacToe (Cloudflare Workers / partyserver). One Durable Object = one match.",
   "scripts": {
-    "dev": "partykit dev",
-    "deploy": "partykit deploy",
+    "dev": "wrangler dev --port 1999",
+    "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mtt/engine": "*",
-    "@mtt/protocol": "*"
+    "@mtt/protocol": "*",
+    "partyserver": "^0.5.8"
   },
   "devDependencies": {
-    "partykit": "^0.0.115",
+    "@cloudflare/workers-types": "^4.20260620.1",
     "typescript": "^5.4.5",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "wrangler": "^4.103.0"
   }
 }
