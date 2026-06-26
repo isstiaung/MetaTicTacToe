@@ -121,6 +121,8 @@ export function OnlineMenu({ name, onChangeName, onCreate, onJoin, onBack }: Onl
         )}
       </div>
 
+      <p className="fine-print">Inactive rooms are freed after 6 hours.</p>
+
       <div className="landing__footer">
         <button type="button" className="btn btn--ghost" onClick={onBack}>
           &larr; Back to menu

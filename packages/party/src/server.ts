@@ -17,7 +17,15 @@
 import { Server, routePartykitRequest } from 'partyserver';
 import type { Connection } from 'partyserver';
 import type { ClientMessage } from '@mtt/protocol';
-import { applyTimeout, createRoom, disconnect, reduce, syncMessage, type RoomState } from './room';
+import {
+  applyTimeout,
+  createRoom,
+  disconnect,
+  reduce,
+  ROOM_TTL_MS,
+  syncMessage,
+  type RoomState,
+} from './room';
 import { authorizeConnection, issueSessionToken, verifyTurnstile } from './auth';
 
 /** Cloudflare's rate-limit binding surface (configured under `ratelimits` in wrangler.jsonc). */
@@ -74,44 +82,59 @@ export class GameServer extends Server<Env> {
     return Boolean(room.seats.X?.connected || room.seats.O?.connected);
   }
 
+  /** When the move clock is live, the absolute time it lapses; else null. */
+  private moveDeadline(room: RoomState): number | null {
+    return room.status === 'playing' && room.turnDeadline !== null && this.someoneConnected(room)
+      ? room.turnDeadline
+      : null;
+  }
+
   /**
-   * Keep the Durable Object alarm in lockstep with the room's move clock: armed at
-   * `turnDeadline` while a game is in progress with someone watching, cleared
-   * otherwise (game over, lobby, or both players gone — which pauses the clock).
+   * Keep the single Durable Object alarm in lockstep with the room. Two timers
+   * share it: the per-move clock (when a game is live with someone watching) and
+   * the idle-room cleanup ({@link ROOM_TTL_MS} after the last action). We always
+   * have a cleanup alarm pending, and arm for the earliest of the two.
    */
   private async syncAlarm(): Promise<void> {
     const room = this.room;
     if (!room) return;
-    const shouldArm =
-      room.status === 'playing' && room.turnDeadline !== null && this.someoneConnected(room);
+    const cleanupAt = room.lastActivityAt + ROOM_TTL_MS;
+    const move = this.moveDeadline(room);
+    const next = move !== null ? Math.min(move, cleanupAt) : cleanupAt;
     const existing = await this.ctx.storage.getAlarm();
-    if (shouldArm) {
-      if (existing !== room.turnDeadline) await this.ctx.storage.setAlarm(room.turnDeadline!);
-    } else if (existing !== null) {
-      await this.ctx.storage.deleteAlarm();
-    }
+    if (existing !== next) await this.ctx.storage.setAlarm(next);
   }
 
   /**
-   * Fired by the runtime when the move clock lapses. Auto-plays an `easy` move for
-   * the current player, broadcasts it, then re-arms for the next turn. Guards
-   * against firing early (a move may have pushed the deadline) and against running
-   * with nobody connected.
+   * Fired by the runtime for whichever shared deadline came due:
+   *
+   * 1. **Cleanup** — the room has been idle for {@link ROOM_TTL_MS}: wipe its
+   *    storage (which clears the alarm too) so the code is reusable, and stop.
+   * 2. **Move clock** — the current player ran out of time: auto-play an `easy`
+   *    move, broadcast it, and re-arm for the next turn.
+   *
+   * The `+1_000` slack absorbs the runtime firing a hair early; if neither
+   * deadline is actually due we just re-arm via `syncAlarm`.
    */
   async onAlarm(): Promise<void> {
     const room = await this.getRoom();
     const now = Date.now();
-    if (
-      this.someoneConnected(room) &&
-      room.status === 'playing' &&
-      room.turnDeadline !== null &&
-      now + 1_000 >= room.turnDeadline
-    ) {
+
+    if (now + 1_000 >= room.lastActivityAt + ROOM_TTL_MS) {
+      // Idle too long — free the room. `deleteAll` also removes the alarm.
+      await this.ctx.storage.deleteAll();
+      this.room = undefined;
+      return;
+    }
+
+    const move = this.moveDeadline(room);
+    if (move !== null && now + 1_000 >= move) {
       const result = applyTimeout(room, now);
       this.room = result.room;
       if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
       await this.persist();
     }
+
     await this.syncAlarm();
   }
 
@@ -119,6 +142,8 @@ export class GameServer extends Server<Env> {
     const room = await this.getRoom();
     // Send the current shared state right away; the client then sends `join` to claim a seat.
     conn.send(JSON.stringify(syncMessage(room)));
+    // Ensure a cleanup alarm exists even for a connect-only room (no join yet).
+    await this.syncAlarm();
   }
 
   async onMessage(sender: Connection<ConnState>, raw: string | ArrayBuffer) {

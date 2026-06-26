@@ -29,6 +29,12 @@ interface SeatState {
  */
 export const TURN_DURATION_MS = 120_000;
 
+/**
+ * How long a room may sit idle (no join/move/rematch/auto-move) before the server
+ * frees it: the Durable Object deletes its own storage so the code is reusable.
+ */
+export const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
+
 /** Difficulty of the move the server auto-plays when a turn times out. */
 const TIMEOUT_DIFFICULTY = 'easy';
 
@@ -45,6 +51,13 @@ export interface RoomState {
    * the server arms a Durable Object alarm at this time.
    */
   turnDeadline: number | null;
+  /**
+   * Epoch-ms of the last meaningful action in the room. The server frees the room
+   * once this is older than {@link ROOM_TTL_MS}. Stamped by the reducer on every
+   * broadcasting action (and by `applyTimeout`, since an auto-move means a player
+   * is still present to watch it).
+   */
+  lastActivityAt: number;
 }
 
 /** Result of handling one message: the new room, replies to the sender, and whether to broadcast. */
@@ -54,7 +67,7 @@ export interface ReduceResult {
   broadcast: boolean;
 }
 
-export function createRoom(code: string): RoomState {
+export function createRoom(code: string, now: number = Date.now()): RoomState {
   return {
     code,
     game: createGame(),
@@ -62,6 +75,7 @@ export function createRoom(code: string): RoomState {
     seats: {},
     rematch: { X: false, O: false },
     turnDeadline: null,
+    lastActivityAt: now,
   };
 }
 
@@ -159,7 +173,7 @@ export function reduce(
       room = { ...room, status: recomputeStatus(room) };
       // Start the clock when the second player makes the game playable; a plain
       // reconnect into an in-progress game keeps the already-running clock.
-      room = { ...room, turnDeadline: nextDeadline(room, now, !wasPlaying) };
+      room = { ...room, turnDeadline: nextDeadline(room, now, !wasPlaying), lastActivityAt: now };
       return { room, reply: [{ type: 'assigned', you: seat, code: room.code }], broadcast: true };
     }
 
@@ -173,7 +187,7 @@ export function reduce(
       }
       room = { ...room, game: applyMove(room.game, msg.board, msg.cell) };
       room = { ...room, status: recomputeStatus(room) };
-      room = { ...room, turnDeadline: nextDeadline(room, now, true) };
+      room = { ...room, turnDeadline: nextDeadline(room, now, true), lastActivityAt: now };
       return { room, reply: [], broadcast: true };
     }
 
@@ -188,6 +202,7 @@ export function reduce(
         room = { ...room, status: recomputeStatus(room) };
         room = { ...room, turnDeadline: nextDeadline(room, now, true) };
       }
+      room = { ...room, lastActivityAt: now };
       return { room, reply: [], broadcast: true };
     }
 
@@ -195,6 +210,7 @@ export function reduce(
       const seat = connPlayerId ? seatOfPlayer(room, connPlayerId) : undefined;
       if (seat) {
         room = setSeat(room, seat, { ...room.seats[seat]!, connected: false });
+        room = { ...room, lastActivityAt: now };
       }
       return { room, reply: [], broadcast: Boolean(seat) };
     }
@@ -219,7 +235,7 @@ export function applyTimeout(
   if (!move) return { room, reply: [], broadcast: false };
   room = { ...room, game: applyMove(room.game, move.board, move.cell) };
   room = { ...room, status: recomputeStatus(room) };
-  room = { ...room, turnDeadline: nextDeadline(room, now, true) };
+  room = { ...room, turnDeadline: nextDeadline(room, now, true), lastActivityAt: now };
   return { room, reply: [], broadcast: true };
 }
 

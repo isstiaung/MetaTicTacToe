@@ -4,6 +4,7 @@ import {
   createRoom,
   reduce,
   disconnect,
+  ROOM_TTL_MS,
   syncMessage,
   TURN_DURATION_MS,
   type RoomState,
@@ -150,6 +151,32 @@ describe('move clock', () => {
     const sync = syncMessage(seatedAt(7_000));
     expect(sync.type).toBe('sync');
     if (sync.type === 'sync') expect(sync.turnDeadline).toBe(7_000 + TURN_DURATION_MS);
+  });
+});
+
+describe('room expiry (idle cleanup)', () => {
+  it('exposes a 6-hour TTL', () => {
+    expect(ROOM_TTL_MS).toBe(6 * 60 * 60 * 1000);
+  });
+
+  it('stamps lastActivityAt on creation and on every action', () => {
+    const room = createRoom('ABCD', 1_000);
+    expect(room.lastActivityAt).toBe(1_000);
+
+    const joined = reduce(room, undefined, join('p1', 'Alice'), 2_000).room;
+    expect(joined.lastActivityAt).toBe(2_000);
+
+    const seated = reduce(joined, undefined, join('p2', 'Bob'), 3_000).room;
+    expect(seated.lastActivityAt).toBe(3_000);
+
+    const moved = reduce(seated, 'p1', { type: 'move', board: 4, cell: 0 }, 7_000).room;
+    expect(moved.lastActivityAt).toBe(7_000);
+  });
+
+  it('treats an auto-move as activity (keeps a watched room alive)', () => {
+    const room = seatedAt(0);
+    const r = applyTimeout(room, 130_000, () => 0);
+    expect(r.room.lastActivityAt).toBe(130_000);
   });
 });
 

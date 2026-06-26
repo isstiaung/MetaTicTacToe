@@ -309,6 +309,13 @@ a {
   min-height: 1.2em;
 }
 
+/* Subtle footnote (e.g. the online room-expiry notice). */
+.fine-print {
+  font-size: var(--mtt-size-xs);
+  color: var(--mtt-muted);
+  text-align: center;
+}
+
 .turn--result {
   font-size: var(--mtt-size-md);
 }
