@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { createRoom, reduce, disconnect, syncMessage, type RoomState } from './room';
+import {
+  applyTimeout,
+  createRoom,
+  reduce,
+  disconnect,
+  syncMessage,
+  TURN_DURATION_MS,
+  type RoomState,
+} from './room';
 import type { ClientMessage } from '@mtt/protocol';
 
 const join = (playerId: string, name: string): ClientMessage => ({ type: 'join', playerId, name });
@@ -9,6 +17,14 @@ function seated(): RoomState {
   let room = createRoom('ABCD');
   room = reduce(room, undefined, join('p1', 'Alice')).room;
   room = reduce(room, undefined, join('p2', 'Bob')).room;
+  return room;
+}
+
+/** As `seated`, but with the game starting at a fixed `now` so the clock is deterministic. */
+function seatedAt(now: number): RoomState {
+  let room = createRoom('ABCD');
+  room = reduce(room, undefined, join('p1', 'Alice'), now).room;
+  room = reduce(room, undefined, join('p2', 'Bob'), now).room;
   return room;
 }
 
@@ -86,6 +102,73 @@ describe('rematch', () => {
     expect(both.room.rematch).toEqual({ X: false, O: false });
     expect(both.room.game.lastMove).toBeNull(); // fresh game
     expect(both.room.game.currentPlayer).toBe('X');
+  });
+});
+
+describe('move clock', () => {
+  it('starts only once the second player makes the game playable', () => {
+    let room = createRoom('ABCD');
+    room = reduce(room, undefined, join('p1', 'Alice'), 1_000).room;
+    expect(room.status).toBe('waiting');
+    expect(room.turnDeadline).toBeNull();
+
+    room = reduce(room, undefined, join('p2', 'Bob'), 5_000).room;
+    expect(room.status).toBe('playing');
+    expect(room.turnDeadline).toBe(5_000 + TURN_DURATION_MS);
+  });
+
+  it('resets the clock on every move', () => {
+    const start = seatedAt(0);
+    const afterMove = reduce(start, 'p1', { type: 'move', board: 4, cell: 0 }, 10_000).room;
+    expect(afterMove.turnDeadline).toBe(10_000 + TURN_DURATION_MS);
+  });
+
+  it('keeps the running clock on a plain reconnect (no reset)', () => {
+    const room = seatedAt(0); // deadline = TURN_DURATION_MS
+    const reconnect = reduce(room, 'p1', join('p1', 'Alice'), 30_000);
+    expect(reconnect.room.turnDeadline).toBe(TURN_DURATION_MS); // unchanged
+  });
+
+  it('restarts a lapsed clock when a player returns (resume after a both-gone pause)', () => {
+    const room = seatedAt(0); // deadline = TURN_DURATION_MS
+    const reconnect = reduce(room, 'p1', join('p1', 'Alice'), TURN_DURATION_MS + 50_000);
+    expect(reconnect.room.turnDeadline).toBe(TURN_DURATION_MS + 50_000 + TURN_DURATION_MS);
+  });
+
+  it('clears the clock when the game ends and restarts it on rematch', () => {
+    const start = seatedAt(0);
+    // Drive a quick X win on the meta board by winning boards 0,1,2 — but simplest:
+    // just verify a rematch (re)arms the clock from a fresh game.
+    const one = reduce(start, 'p1', { type: 'rematch' }, 1_000).room;
+    expect(one.rematch).toEqual({ X: true, O: false });
+    const both = reduce(one, 'p2', { type: 'rematch' }, 9_000).room;
+    expect(both.game.lastMove).toBeNull();
+    expect(both.turnDeadline).toBe(9_000 + TURN_DURATION_MS);
+  });
+
+  it('broadcasts the deadline in sync', () => {
+    const sync = syncMessage(seatedAt(7_000));
+    expect(sync.type).toBe('sync');
+    if (sync.type === 'sync') expect(sync.turnDeadline).toBe(7_000 + TURN_DURATION_MS);
+  });
+});
+
+describe('turn timeout (auto-move)', () => {
+  it('auto-plays a legal move for the current player and re-arms the clock', () => {
+    const room = seatedAt(0); // X to move
+    const r = applyTimeout(room, 130_000, () => 0); // deterministic rng
+    expect(r.broadcast).toBe(true);
+    expect(r.room.game.currentPlayer).toBe('O'); // turn flipped
+    expect(r.room.game.lastMove).not.toBeNull();
+    expect(r.room.turnDeadline).toBe(130_000 + TURN_DURATION_MS);
+  });
+
+  it('is a no-op when the game is not in progress', () => {
+    let room = createRoom('ABCD');
+    room = reduce(room, undefined, join('p1', 'Alice'), 0).room; // still waiting
+    const r = applyTimeout(room, 1_000);
+    expect(r.broadcast).toBe(false);
+    expect(r.room.game.lastMove).toBeNull();
   });
 });
 

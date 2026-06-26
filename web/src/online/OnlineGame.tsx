@@ -48,9 +48,44 @@ function PlayerTag({
   );
 }
 
+/**
+ * Live countdown for the current player's move. Ticks once a second off the
+ * server's absolute `deadline`; the server auto-plays an `easy` move when it
+ * hits zero, so this is purely informational and self-corrects on every sync.
+ */
+function MoveTimer({ deadline, seat }: { deadline: number; seat: Seat }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  const remaining = Math.max(0, deadline - now);
+  const totalSec = Math.ceil(remaining / 1000);
+  const label = `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`;
+  const urgent = remaining <= 15_000;
+
+  return (
+    <span
+      className={cn(
+        'move-timer',
+        seat === 'X' ? 'move-timer--X' : 'move-timer--O',
+        urgent && 'move-timer--urgent',
+      )}
+      role="timer"
+      aria-label={`${label} left to move`}
+    >
+      <span className="move-timer__time">{label}</span>
+      <span className="move-timer__unit">left</span>
+    </span>
+  );
+}
+
 export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
   const game = useOnlineGame(code, name);
-  const { state, status, you, players, rematch, connected, error, sendMove, sendRematch } = game;
+  const { state, status, you, players, rematch, connected, turnDeadline, error, sendMove, sendRematch } =
+    game;
   const [copied, setCopied] = useState(false);
   // Whether the player dismissed the result dialog; reset when a new game
   // (rematch) begins, i.e. once the board no longer has a winner.
@@ -191,6 +226,9 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
       </div>
 
       <div className="status" aria-live="polite">
+        {!gameOver && status === 'playing' && turnDeadline !== null && (
+          <MoveTimer deadline={turnDeadline} seat={state.currentPlayer} />
+        )}
         {gameOver && (
           <span className="turn turn--result">
             <span>{resultLabel}</span>

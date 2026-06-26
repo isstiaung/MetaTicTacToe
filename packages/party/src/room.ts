@@ -5,7 +5,7 @@
  * entire authority (seat assignment, turn + legality enforcement, rematch, disconnect) is
  * unit-testable. It reuses `@mtt/engine` as the single source of truth for the rules.
  */
-import { applyMove, createGame, isLegalMove } from '@mtt/engine';
+import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';
 import type {
   ClientMessage,
   RematchState,
@@ -23,6 +23,15 @@ interface SeatState {
   connected: boolean;
 }
 
+/**
+ * How long the current player has to move before the server auto-plays for them.
+ * A move (or a new game) resets the clock; running out triggers an `easy` AI move.
+ */
+export const TURN_DURATION_MS = 120_000;
+
+/** Difficulty of the move the server auto-plays when a turn times out. */
+const TIMEOUT_DIFFICULTY = 'easy';
+
 /** Server-internal room state (a superset of what's broadcast). */
 export interface RoomState {
   code: string;
@@ -30,6 +39,12 @@ export interface RoomState {
   status: RoomStatus;
   seats: { X?: SeatState; O?: SeatState };
   rematch: RematchState;
+  /**
+   * Absolute epoch-ms deadline for the current move, or `null` when no clock is
+   * running (not `playing`). The pure reducer sets it from the injected `now`;
+   * the server arms a Durable Object alarm at this time.
+   */
+  turnDeadline: number | null;
 }
 
 /** Result of handling one message: the new room, replies to the sender, and whether to broadcast. */
@@ -46,6 +61,7 @@ export function createRoom(code: string): RoomState {
     status: 'waiting',
     seats: {},
     rematch: { X: false, O: false },
+    turnDeadline: null,
   };
 }
 
@@ -80,6 +96,7 @@ export function syncMessage(room: RoomState): ServerMessage {
     game: room.game,
     players: players(room),
     rematch: room.rematch,
+    turnDeadline: room.turnDeadline,
   };
 }
 
@@ -92,19 +109,39 @@ function setSeat(room: RoomState, seat: Seat, value: SeatState): RoomState {
 }
 
 /**
+ * Derive the move clock for the room's current status.
+ *
+ * - Not `playing` → `null` (no clock).
+ * - A new turn just began (`fresh`) → a fresh `now + TURN_DURATION_MS` deadline.
+ * - Same turn continuing (e.g. a reconnect) → keep the running deadline, but if it
+ *   has already lapsed or was paused (both players had left), restart it so a
+ *   returning player isn't auto-moved the instant they reconnect.
+ */
+function nextDeadline(room: RoomState, now: number, fresh: boolean): number | null {
+  if (room.status !== 'playing') return null;
+  if (fresh || room.turnDeadline === null || room.turnDeadline <= now) {
+    return now + TURN_DURATION_MS;
+  }
+  return room.turnDeadline;
+}
+
+/**
  * Apply a client message to the room.
  *
  * @param connPlayerId the player id already bound to the sending connection (undefined until
  *   that connection has sent a `join`). For a `join` message the id comes from the message itself.
+ * @param now epoch-ms used to stamp the move clock (injected so the reducer stays pure/testable).
  */
 export function reduce(
   room: RoomState,
   connPlayerId: string | undefined,
   msg: ClientMessage,
+  now: number = Date.now(),
 ): ReduceResult {
   switch (msg.type) {
     case 'join': {
       const pid = msg.playerId;
+      const wasPlaying = room.status === 'playing';
       let seat = seatOfPlayer(room, pid);
       if (seat) {
         // Reclaim an existing seat (reconnect): refresh name + mark connected.
@@ -120,6 +157,9 @@ export function reduce(
         return error(room, 'room_full', 'This game already has two players.');
       }
       room = { ...room, status: recomputeStatus(room) };
+      // Start the clock when the second player makes the game playable; a plain
+      // reconnect into an in-progress game keeps the already-running clock.
+      room = { ...room, turnDeadline: nextDeadline(room, now, !wasPlaying) };
       return { room, reply: [{ type: 'assigned', you: seat, code: room.code }], broadcast: true };
     }
 
@@ -133,6 +173,7 @@ export function reduce(
       }
       room = { ...room, game: applyMove(room.game, msg.board, msg.cell) };
       room = { ...room, status: recomputeStatus(room) };
+      room = { ...room, turnDeadline: nextDeadline(room, now, true) };
       return { room, reply: [], broadcast: true };
     }
 
@@ -145,6 +186,7 @@ export function reduce(
         rematch = { X: false, O: false };
         room = { ...room, game: createGame(), rematch };
         room = { ...room, status: recomputeStatus(room) };
+        room = { ...room, turnDeadline: nextDeadline(room, now, true) };
       }
       return { room, reply: [], broadcast: true };
     }
@@ -157,6 +199,28 @@ export function reduce(
       return { room, reply: [], broadcast: Boolean(seat) };
     }
   }
+}
+
+/**
+ * Auto-play a move for the current player because their turn clock ran out.
+ *
+ * Pure (the engine's RNG is injectable). The server calls this from its Durable
+ * Object alarm. A no-op unless the game is in progress; otherwise it picks an
+ * `easy` engine move, applies it, and re-arms the clock for the next turn (or
+ * clears it when the auto-move ends the game).
+ */
+export function applyTimeout(
+  room: RoomState,
+  now: number = Date.now(),
+  rng: () => number = Math.random,
+): ReduceResult {
+  if (room.status !== 'playing') return { room, reply: [], broadcast: false };
+  const move = chooseAiMove(room.game, TIMEOUT_DIFFICULTY, rng);
+  if (!move) return { room, reply: [], broadcast: false };
+  room = { ...room, game: applyMove(room.game, move.board, move.cell) };
+  room = { ...room, status: recomputeStatus(room) };
+  room = { ...room, turnDeadline: nextDeadline(room, now, true) };
+  return { room, reply: [], broadcast: true };
 }
 
 /** Mark a player's seat disconnected (called when their connection closes). */

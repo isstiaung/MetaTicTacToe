@@ -39,6 +39,8 @@ export interface UseOnlineGame {
   connected: boolean;
   /** The room code (from the server's `assigned`, falling back to the one we connected with). */
   code: string;
+  /** Epoch-ms deadline for the current move (server auto-plays on lapse), or null. */
+  turnDeadline: number | null;
   /** A surfaced, human-readable error from the server, or null. */
   error: string | null;
   /** Send a move intent (server validates turn + legality). */
@@ -60,6 +62,7 @@ export function useOnlineGame(code: string): UseOnlineGame {
   const [rematch, setRematch] = useState<RematchState>(NO_REMATCH);
   const [connected, setConnected] = useState(false);
   const [serverCode, setServerCode] = useState(code);
+  const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
@@ -114,6 +117,7 @@ export function useOnlineGame(code: string): UseOnlineGame {
           setStatus(msg.status);
           setPlayers(msg.players);
           setRematch(msg.rematch);
+          setTurnDeadline(msg.turnDeadline);
           break;
         case 'error':
           if (msg.code === 'not_joined') {
@@ -194,6 +198,7 @@ export function useOnlineGame(code: string): UseOnlineGame {
     rematch,
     connected,
     code: serverCode,
+    turnDeadline,
     error,
     sendMove,
     sendRematch,

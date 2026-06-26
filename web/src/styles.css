@@ -317,6 +317,66 @@ a {
   color: var(--mtt-muted);
 }
 
+/* ---------- Move timer (online) ---------- */
+
+.move-timer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: var(--mtt-radius-pill);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition:
+    background var(--mtt-base) var(--mtt-ease),
+    color var(--mtt-base) var(--mtt-ease);
+}
+
+.move-timer__time {
+  font-size: var(--mtt-size-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.move-timer__unit {
+  font-size: var(--mtt-size-xs);
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.move-timer--X {
+  background: var(--mtt-x-soft);
+  color: var(--mtt-x);
+}
+
+.move-timer--O {
+  background: var(--mtt-o-soft);
+  color: var(--mtt-o);
+}
+
+/* Final stretch: switch to the danger colour and gently pulse. */
+.move-timer--urgent {
+  background: color-mix(in srgb, var(--mtt-danger) 14%, transparent);
+  color: var(--mtt-danger);
+  animation: move-timer-pulse 1s var(--mtt-ease) infinite;
+}
+
+@keyframes move-timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-timer--urgent {
+    animation: none;
+  }
+}
+
 /* ---------- Score readout ---------- */
 
 .score {
