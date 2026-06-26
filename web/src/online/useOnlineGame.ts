@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PartySocket } from 'partysocket';
 import { createGame } from '@mtt/engine';
+import { currentSessionToken } from './auth';
 import type { GameState } from '@mtt/engine';
 import type {
   ClientMessage,
@@ -138,7 +139,13 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
     setError(null);
     setConnected(false);
 
-    const socket = new PartySocket({ host: PARTYKIT_HOST, room: code });
+    // `query` runs on every (re)connect: attach the cached session token so the
+    // server's connect gate lets us through. The token is minted on the online menu.
+    const socket = new PartySocket({
+      host: PARTYKIT_HOST,
+      room: code,
+      query: async () => ({ token: currentSessionToken() }),
+    });
     socketRef.current = socket;
 
     const onOpen = () => {

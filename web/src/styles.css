@@ -807,6 +807,21 @@ a {
   font-size: var(--mtt-size-sm);
 }
 
+/* ---------- Online auth (Turnstile gate) ---------- */
+
+.online-auth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.5rem;
+}
+
+/* The widget is invisible until Cloudflare needs an interaction; reserve no space when empty. */
+.turnstile:empty {
+  display: none;
+}
+
 /* ---------- Motion preferences ---------- */
 
 @media (prefers-reduced-motion: reduce) {
