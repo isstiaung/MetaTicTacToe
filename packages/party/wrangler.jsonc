@@ -1,10 +1,14 @@
 {
-  // Cloudflare Workers config. Deploys to https://metatictactoe.<account>.workers.dev
-  // (free; no custom domain needed). One Durable Object per match room.
+  // Cloudflare Worker: the authoritative GAME SERVER only (API + WebSockets) — the web UI is a
+  // SEPARATE worker (see web/wrangler.jsonc). One Durable Object per match room.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "metatictactoe",
   "main": "src/server.ts",
   "compatibility_date": "2025-01-01",
+  // Players never visit this worker directly; the web app (mttt.isstiaung.me) connects here for
+  // POST /auth and wss /parties/*. custom_domain:true makes `wrangler deploy` provision the domain
+  // (the isstiaung.me zone must be on this Cloudflare account). Also reachable on its workers.dev host.
+  "routes": [{ "pattern": "party.mttt.isstiaung.me", "custom_domain": true }],
   "durable_objects": {
     // Binding name "Main" -> partyserver maps it to the default party "main"
     // that partysocket uses, so the clients connect unchanged.

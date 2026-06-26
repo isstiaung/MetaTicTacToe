@@ -1,83 +1,97 @@
 # Deploying MetaTicTacToe
 
-Three deployables, in order — the clients bake in the server host, so **deploy the server
-first**. Everything here fits free hobby tiers (the only optional cost is the Play Store's
-one-time $25, and only when you ship mobile).
+**Two Cloudflare Workers, both auto-deployed when you merge to `deploy-app`** — via Cloudflare's
+native **Workers Builds** (git-triggered CI/CD). No GitHub Actions, no manual `wrangler deploy`.
+Everything fits free hobby tiers (the only optional cost is the Play Store's one-time $25, mobile only).
 
-```
-1. Workers server   ──▶  wss://metatictactoe.<account>.workers.dev
-2. Web app          ──▶  static site (Cloudflare Pages); server host baked in at BUILD time
-3. Mobile app       ──▶  later
-4. Abuse gate       ──▶  Cloudflare Turnstile + per-IP rate limits (optional, recommended)
-```
+| Worker | What it is | Host | Config |
+| --- | --- | --- | --- |
+| `metatictactoe` | **Game server** — `POST /auth` + `wss /parties/*` (partyserver + Durable Objects) | `party.mttt.isstiaung.me` | `packages/party/wrangler.jsonc` |
+| `metatictactoe-web` | **Web app** — the Vite SPA (assets-only worker) | `mttt.isstiaung.me` | `web/wrangler.jsonc` |
 
-## 1. Server — Cloudflare Workers (deploy first)
+Players visit **`mttt.isstiaung.me`** (web worker); the app connects to **`party.mttt.isstiaung.me`**
+(game server) for online play. Both also stay reachable on their `*.workers.dev` hosts.
 
-The authoritative game server (`@mtt/party`) runs on **Cloudflare Workers + Durable Objects**
-(via [`partyserver`](https://github.com/cloudflare/partykit/tree/main/packages/partyserver)).
-Deploys to your own Cloudflare account — free, no custom domain needed.
+## Auto-deploy: merge `main` → `deploy-app`
 
-```bash
-npx wrangler login            # opens a browser; authorize Cloudflare
-npm run deploy -w @mtt/party  # = wrangler deploy (config in packages/party/wrangler.jsonc)
-```
+Each worker has its **own** Workers Builds connection to this repo, both watching the **`deploy-app`**
+branch. Push (or merge) to `deploy-app` and both workers rebuild and deploy. That's the whole release
+flow once the one-time setup below is done.
 
-You'll get a host like **`metatictactoe.<account>.workers.dev`** (HTTPS + WSS included). Use that
-as the host value for the clients below. Durable Objects (SQLite-backed, with hibernation) are on
-the free plan, so idle rooms cost ~nothing.
+### One-time setup — per worker (Cloudflare dashboard)
 
-Local dev: `npm run dev -w @mtt/party` runs `wrangler dev` on `127.0.0.1:1999` (matching the
-clients' default host).
+Dashboard → **Workers & Pages** → *(the worker)* → **Settings → Build** → connect the GitHub repo
+`isstiaung/MetaTicTacToe`, then set:
 
-> Why not the hosted `*.partykit.dev`? That shared zone has hit Cloudflare's custom-domain limit,
-> so new projects can't deploy there — running on your own Workers account is the supported path
-> and is free. The game logic (`room.ts`) and both clients are unchanged.
+**1. Game server — `metatictactoe`**
 
-## 2. Web — Cloudflare Pages
-
-Static Vite build that auto-deploys on push to `main`.
-
-**Cloudflare → Pages → Create project → connect this repo**, then set:
-
-| Setting | Value |
+| Field | Value |
 | --- | --- |
-| Production branch | `main` |
-| Root directory | `web` |
-| Build command | `npm ci && npm run build` |
-| Build output directory | `dist` |
-| Environment variable | `VITE_PARTYKIT_HOST` = `metatictactoe.<account>.workers.dev` |
-| Environment variable | `VITE_TURNSTILE_SITE_KEY` = your Turnstile **site** key (see step 4) |
+| Git branch | `deploy-app` |
+| Root directory | `/` |
+| Build command | `npm ci && npm test && npm run typecheck` |
+| Deploy command | `npx wrangler deploy --config packages/party/wrangler.jsonc` |
 
-`VITE_PARTYKIT_HOST` is read at **build time** (Vite inlines it), so it must be set in the Pages
-environment — see [`web/.env.example`](web/.env.example). Pages checks out the whole repo, so the
-`../packages/*` source the web app aliases is available during the build.
+No build variables. Its runtime **secrets** are set separately (see *Abuse gate* below) and persist
+across deploys — Workers Builds never touches them.
 
-Result: `https://<project>.pages.dev` over HTTPS, so the `wss://` connection to the server matches.
+**2. Web app — `metatictactoe-web`**
 
-Local production-style build:
+| Field | Value |
+| --- | --- |
+| Git branch | `deploy-app` |
+| Root directory | `/` |
+| Build command | `npm ci && npm test && npm run typecheck && npm ci --prefix web && npm run build --prefix web` |
+| Deploy command | `npx wrangler deploy --config web/wrangler.jsonc` |
+
+Build variables (**public** — Vite inlines them into the bundle at build time; *not* secrets):
+
+| Variable | Value |
+| --- | --- |
+| `VITE_PARTYKIT_HOST` | `party.mttt.isstiaung.me` |
+| `VITE_TURNSTILE_SITE_KEY` | `0x4AAAAAADri3jNemOcHmzhE` (Turnstile **site** key) |
+
+> **Optional:** in each worker's Build settings, set **build watch paths** so the game server only
+> rebuilds on `packages/**` changes and the web worker only on `web/**`. By default both deploy on
+> every push to `deploy-app`, which is fine.
+
+**Test gate.** Both build commands run `npm test && npm run typecheck` (engine + server tests and all
+package typechecks) *before* building/deploying; the web worker additionally gates on the web build
+(`tsc -b && vite build`). A failing test or type error fails the build, so the deploy is skipped and
+the broken revision never reaches production. This keeps the gate inside Cloudflare (no GitHub
+Actions) — note it runs at **deploy time**, so it blocks the deploy, not the merge. (If you also want
+**pre-merge** checks on PRs, that would be a small tests-only GitHub Action.)
+
+### Custom domains (one-time)
+
+`custom_domain: true` in each `wrangler.jsonc` makes `wrangler deploy` provision the domain on the
+`isstiaung.me` zone automatically — but a domain can attach to only **one** worker. `mttt.isstiaung.me`
+is currently on the game-server worker, so free it first:
+
+1. Dashboard → `metatictactoe` → **Settings → Domains & Routes** → remove `mttt.isstiaung.me`.
+2. The next deploy of each worker claims its domain: `metatictactoe-web` → `mttt.isstiaung.me`,
+   `metatictactoe` → `party.mttt.isstiaung.me`. (Or add them by hand under *Domains & Routes*.)
+
+## Manual deploy (fallback)
+
+From a checkout, with `npx wrangler login` done once:
 
 ```bash
-cd web
-VITE_PARTYKIT_HOST=metatictactoe.<account>.workers.dev npm run build
+# Game server
+npx wrangler deploy --config packages/party/wrangler.jsonc
+
+# Web app — build first (Vite reads web/.env.production.local for the two VITE_ vars), then deploy
+npm run build --prefix web
+npx wrangler deploy --config web/wrangler.jsonc
 ```
 
-## 3. Mobile — later
+For local prod builds the two `VITE_` values live in `web/.env.production.local` (gitignored); see
+[`web/.env.example`](web/.env.example).
 
-Not deployed yet. When ready: set `mobile/app.json` → `expo.extra.partykitHost` to the deployed
-host, then build with EAS (`eas build -p android --profile preview` for a shareable APK, or
-`--profile production` + Play Store). EAS must see the monorepo root so `packages/*` resolve
-(metro `watchFolders` + the `postinstall` symlink) — follow Expo's monorepo guide, or add `web`
-and `mobile` to the root `workspaces` so EAS's built-in monorepo support handles it.
+## Abuse gate — Turnstile connection gate (game server)
 
-> **Heads-up if the abuse gate (step 4) is on:** the mobile client doesn't mint a Turnstile
-> token yet, so it can't connect to a *gated* production server — it works against the open dev
-> server only. Wiring a Turnstile webview into the RN app is a follow-up; until then keep mobile
-> pointed at dev, or treat the gate as web-only.
-
-## 4. Abuse prevention — Turnstile connection gate
-
-The server is publicly addressable (anyone with the host can open a socket), so online play is
-gated: `onBeforeConnect` rejects a connection with **401** unless it carries a short-lived,
+The game-server worker is publicly addressable (anyone with the host can open a socket), so online
+play is gated: `onBeforeConnect` rejects a connection with **401** unless it carries a short-lived,
 HMAC-signed session token. The browser earns that token by passing an invisible **Cloudflare
 Turnstile** challenge and exchanging it at `POST /auth`. Both the mint and the connection are
 **rate-limited per IP**. There are no accounts — this is bot/abuse mitigation, not identity auth.
@@ -85,47 +99,54 @@ Turnstile** challenge and exchanging it at `POST /auth`. Both the mint and the c
 The gate is **off until you configure it** (so local dev and CI stay zero-setup). Turn it on once:
 
 1. **Create a Turnstile widget** — Cloudflare dashboard → Turnstile → *Add widget*. List your web
-   hostname(s), e.g. `metatictactoe-web.pages.dev` and `localhost`. Copy the **Site key** (public)
-   and **Secret key** (private).
+   hostname(s): **`mttt.isstiaung.me`** and `localhost`. Copy the **Site key** (public — it's the
+   `VITE_TURNSTILE_SITE_KEY` build var above) and the **Secret key** (private — used below).
 
-2. **Set the Worker secrets, then redeploy** (the gate becomes active once *both* are set):
+2. **Set the game-server worker's secrets** (the gate becomes active once *both* are set; they
+   persist across Workers Builds deploys):
    ```bash
    cd packages/party
    echo "<your-turnstile-secret-key>" | npx wrangler secret put TURNSTILE_SECRET
    openssl rand -hex 32 | npx wrangler secret put AUTH_SECRET   # signs session tokens
-   npx wrangler deploy
    ```
+   (No redeploy needed for secrets to take effect, but a deploy is harmless.)
 
-3. **Give the web build the site key** — Cloudflare → Pages → your project → *Settings →
-   Environment variables* → add `VITE_TURNSTILE_SITE_KEY = <your-site-key>` (Production), then
-   redeploy (push to `main`, or *Retry deployment*). For a local prod build, put it in
-   `web/.env.production.local`.
+3. **Web build already has the site key** via the `VITE_TURNSTILE_SITE_KEY` build variable (above)
+   and `web/.env.production.local` for local builds.
 
 **Verify** the live gate (should print `401`):
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' \
-  https://metatictactoe.<account>.workers.dev/parties/main/TEST
+  https://party.mttt.isstiaung.me/parties/main/TEST
 ```
 
 Notes:
 - **Fail-open by design:** no `AUTH_SECRET` → gate disabled; no `TURNSTILE_SECRET` → `/auth` issues
-  tokens without a challenge. Set **both** for real protection. Misconfiguration locks players out
-  (a real site key paired with a missing/wrong secret), which surfaces the problem rather than
-  silently leaving you exposed.
+  tokens without a challenge. Set **both** for real protection.
 - **Test keys** (Cloudflare-documented): the web defaults to the always-pass site key
-  `1x00000000000000000000AA`; its matching secret is `1x0000000000000000000000000000000AA` if you
-  want to exercise the full flow without a real widget.
+  `1x00000000000000000000AA`; its matching secret is `1x0000000000000000000000000000000AA`.
 - Tune the limits in [`packages/party/wrangler.jsonc`](packages/party/wrangler.jsonc) (`ratelimits`)
-  and the session TTL / CORS origin in `packages/party/src/server.ts`.
+  and the session TTL / CORS origin (`WEB_ORIGIN`) in `packages/party/src/server.ts`. `WEB_ORIGIN`
+  is `"*"` (fine — `/auth` requires a Turnstile solve); tighten to `https://mttt.isstiaung.me` if you like.
 
-## Wiring recap
+## Mobile — later
 
-The server host flows into the web build env (`VITE_PARTYKIT_HOST`) and, later, mobile
-`app.json` `extra.partykitHost`. When the server URL changes, update it in those places.
+Not deployed yet. When ready: set `mobile/app.json` → `expo.extra.partykitHost` to
+`party.mttt.isstiaung.me`, then build with EAS (`eas build -p android --profile preview` for a
+shareable APK, or `--profile production` + Play Store). EAS must see the monorepo root so `packages/*`
+resolve (metro `watchFolders` + the `postinstall` symlink) — follow Expo's monorepo guide.
 
-## CI
+> **Heads-up:** the mobile client doesn't mint a Turnstile token yet, so it can't connect to the
+> *gated* production server — point it at the dev server until a Turnstile webview is wired into the
+> RN app, or treat the gate as web-only.
 
-`.github/workflows/ci.yml` runs the engine + server tests, typechecks all packages, and builds
-the web app on every push / PR — a safety net before anything deploys.
+## Local dev
+
+```bash
+npm run dev -w @mtt/party   # game server on 127.0.0.1:1999 (clients' default host)
+cd web && npm run dev       # Vite dev server (defaults VITE_PARTYKIT_HOST to 127.0.0.1:1999)
+npm test                    # engine + party tests
+npm run typecheck           # all shared packages
+```
