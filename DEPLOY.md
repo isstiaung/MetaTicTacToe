@@ -21,7 +21,14 @@ flow once the one-time setup below is done.
 ### One-time setup — per worker (Cloudflare dashboard)
 
 Dashboard → **Workers & Pages** → *(the worker)* → **Settings → Build** → connect the GitHub repo
-`isstiaung/MetaTicTacToe`, then set:
+`isstiaung/MetaTicTacToe`, then set the fields below.
+
+> **The web worker doesn't exist yet.** `metatictactoe-web` is currently a *Pages* project (Direct
+> Upload — Cloudflare can't attach a git connection to those, which is the "No Git connection" you
+> see). Delete that Pages project first (it frees the name **and** the `mttt.isstiaung.me` domain),
+> then create the web **Worker** via **Create → Workers → Import a repository** — that flow connects
+> git + builds in one step. The game-server worker `metatictactoe` already exists, so just connect git
+> in its **Settings → Build**.
 
 **1. Game server — `metatictactoe`**
 
@@ -65,12 +72,17 @@ Actions) — note it runs at **deploy time**, so it blocks the deploy, not the m
 ### Custom domains (one-time)
 
 `custom_domain: true` in each `wrangler.jsonc` makes `wrangler deploy` provision the domain on the
-`isstiaung.me` zone automatically — but a domain can attach to only **one** worker. `mttt.isstiaung.me`
-is currently on the game-server worker, so free it first:
+`isstiaung.me` zone automatically — but a domain can attach to only **one** resource. `mttt.isstiaung.me`
+is currently on the **`metatictactoe-web` Pages project**, so free it first:
 
-1. Dashboard → `metatictactoe` → **Settings → Domains & Routes** → remove `mttt.isstiaung.me`.
-2. The next deploy of each worker claims its domain: `metatictactoe-web` → `mttt.isstiaung.me`,
-   `metatictactoe` → `party.mttt.isstiaung.me`. (Or add them by hand under *Domains & Routes*.)
+1. Delete the `metatictactoe-web` **Pages** project (dashboard → its *Settings → Delete*, or
+   `npx wrangler pages project delete metatictactoe-web`). This frees the name and `mttt.isstiaung.me`.
+2. The first git-deploy of each worker then claims its domain: the new `metatictactoe-web` **Worker**
+   → `mttt.isstiaung.me`, and `metatictactoe` → `party.mttt.isstiaung.me`. (Or add them by hand under
+   each worker's *Settings → Domains & Routes*.)
+
+> Brief gap: `mttt.isstiaung.me` is down between deleting the Pages project and the web worker's
+> first successful build. Do the web worker setup right after the delete to keep it short.
 
 ## Manual deploy (fallback)
 
