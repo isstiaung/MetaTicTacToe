@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Turnstile } from './Turnstile';
+import { HelpButton } from '../components/HelpButton';
 import { exchangeTurnstileToken, hasSessionToken, TURNSTILE_SITE_KEY } from './auth';
 
 interface OnlineMenuProps {
@@ -123,10 +124,11 @@ export function OnlineMenu({ name, onChangeName, onCreate, onJoin, onBack }: Onl
 
       <p className="fine-print">Inactive rooms are freed after 6 hours.</p>
 
-      <div className="landing__footer">
+      <div className="landing__footer landing__footer--row">
         <button type="button" className="btn btn--ghost" onClick={onBack}>
           &larr; Back to menu
         </button>
+        <HelpButton />
       </div>
     </main>
   );

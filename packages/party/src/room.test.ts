@@ -107,48 +107,54 @@ describe('rematch', () => {
 });
 
 describe('move clock', () => {
-  it('starts only once the second player makes the game playable', () => {
+  /** A seated room with the opening move already played, so the clock is running. */
+  function started(now: number): RoomState {
+    return reduce(seatedAt(0), 'p1', { type: 'move', board: 4, cell: 0 }, now).room;
+  }
+
+  it('leaves the opening move untimed, then starts the clock on the first move', () => {
     let room = createRoom('ABCD');
     room = reduce(room, undefined, join('p1', 'Alice'), 1_000).room;
-    expect(room.status).toBe('waiting');
     expect(room.turnDeadline).toBeNull();
 
     room = reduce(room, undefined, join('p2', 'Bob'), 5_000).room;
     expect(room.status).toBe('playing');
-    expect(room.turnDeadline).toBe(5_000 + TURN_DURATION_MS);
+    expect(room.turnDeadline).toBeNull(); // opening move is untimed (rules-explainer grace)
+
+    const moved = reduce(room, 'p1', { type: 'move', board: 4, cell: 0 }, 8_000).room;
+    expect(moved.turnDeadline).toBe(8_000 + TURN_DURATION_MS);
   });
 
   it('resets the clock on every move', () => {
-    const start = seatedAt(0);
-    const afterMove = reduce(start, 'p1', { type: 'move', board: 4, cell: 0 }, 10_000).room;
-    expect(afterMove.turnDeadline).toBe(10_000 + TURN_DURATION_MS);
+    const afterFirst = started(10_000); // clock armed at the first move
+    const afterSecond = reduce(afterFirst, 'p2', { type: 'move', board: 0, cell: 0 }, 20_000).room;
+    expect(afterSecond.turnDeadline).toBe(20_000 + TURN_DURATION_MS);
   });
 
   it('keeps the running clock on a plain reconnect (no reset)', () => {
-    const room = seatedAt(0); // deadline = TURN_DURATION_MS
-    const reconnect = reduce(room, 'p1', join('p1', 'Alice'), 30_000);
-    expect(reconnect.room.turnDeadline).toBe(TURN_DURATION_MS); // unchanged
+    const room = started(1_000); // deadline = 1_000 + TURN_DURATION_MS
+    const reconnect = reduce(room, 'p2', join('p2', 'Bob'), 30_000);
+    expect(reconnect.room.turnDeadline).toBe(1_000 + TURN_DURATION_MS); // unchanged
   });
 
   it('restarts a lapsed clock when a player returns (resume after a both-gone pause)', () => {
-    const room = seatedAt(0); // deadline = TURN_DURATION_MS
-    const reconnect = reduce(room, 'p1', join('p1', 'Alice'), TURN_DURATION_MS + 50_000);
-    expect(reconnect.room.turnDeadline).toBe(TURN_DURATION_MS + 50_000 + TURN_DURATION_MS);
+    const room = started(1_000); // deadline = 1_000 + TURN_DURATION_MS
+    const at = 1_000 + TURN_DURATION_MS + 50_000; // well past the deadline
+    const reconnect = reduce(room, 'p2', join('p2', 'Bob'), at);
+    expect(reconnect.room.turnDeadline).toBe(at + TURN_DURATION_MS);
   });
 
-  it('clears the clock when the game ends and restarts it on rematch', () => {
-    const start = seatedAt(0);
-    // Drive a quick X win on the meta board by winning boards 0,1,2 — but simplest:
-    // just verify a rematch (re)arms the clock from a fresh game.
-    const one = reduce(start, 'p1', { type: 'rematch' }, 1_000).room;
+  it('keeps the new game untimed until its first move on rematch', () => {
+    const start = started(1_000);
+    const one = reduce(start, 'p1', { type: 'rematch' }, 2_000).room;
     expect(one.rematch).toEqual({ X: true, O: false });
     const both = reduce(one, 'p2', { type: 'rematch' }, 9_000).room;
     expect(both.game.lastMove).toBeNull();
-    expect(both.turnDeadline).toBe(9_000 + TURN_DURATION_MS);
+    expect(both.turnDeadline).toBeNull(); // fresh game's opening move is untimed again
   });
 
-  it('broadcasts the deadline in sync', () => {
-    const sync = syncMessage(seatedAt(7_000));
+  it('broadcasts the deadline in sync once the clock is running', () => {
+    const sync = syncMessage(started(7_000));
     expect(sync.type).toBe('sync');
     if (sync.type === 'sync') expect(sync.turnDeadline).toBe(7_000 + TURN_DURATION_MS);
   });

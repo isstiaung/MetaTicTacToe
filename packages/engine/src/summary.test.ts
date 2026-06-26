@@ -24,16 +24,18 @@ describe('boardScore', () => {
 });
 
 describe('gameSummaryText', () => {
-  it('includes the result, score, and a 3x3 grid', () => {
+  it('includes the result, score, and an emoji 3x3 grid', () => {
     const s = decided();
     s.winner = 'X';
     const text = gameSummaryText(s, { url: 'https://example.com' });
     expect(text).toContain('Meta Tic-Tac-Toe');
     expect(text).toContain('X (X) wins!');
-    expect(text).toContain('Boards won — X: 2  O: 1');
+    expect(text).toContain('Boards won — ❌ 2  ⭕ 1');
     expect(text).toContain('https://example.com');
-    // Grid has three rows (two separators).
-    expect(text.match(/-----------/g)).toHaveLength(2);
+    // Emoji grid: 0,1 = X (❌), 4 = O (⭕), 8 = draw (⬜), rest unclaimed (⬛).
+    expect(text).toContain('❌❌⬛\n⬛⭕⬛\n⬛⬛⬜');
+    // No ASCII grid separators anymore.
+    expect(text).not.toMatch(/\|/);
   });
 
   it('uses player display names when provided', () => {

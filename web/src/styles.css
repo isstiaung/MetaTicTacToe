@@ -110,6 +110,11 @@ a {
   justify-content: center;
 }
 
+.landing__footer--row {
+  align-items: center;
+  gap: var(--mtt-space-md);
+}
+
 .rules-link {
   font-size: var(--mtt-size-sm);
   color: var(--mtt-ink-soft);
@@ -704,6 +709,39 @@ a {
   flex-direction: column;
   gap: var(--mtt-space-sm);
   width: 100%;
+}
+
+/* ---------- Rules explainer ---------- */
+
+.modal--rules {
+  max-width: 420px;
+}
+
+.rules-list {
+  margin: 0;
+  padding-left: 1.25em;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mtt-space-sm);
+  font-size: var(--mtt-size-sm);
+  line-height: 1.5;
+  color: var(--mtt-ink-soft);
+}
+
+.rules-list b {
+  color: var(--mtt-ink);
+}
+
+/* The "?" icon button (top bars / footers). */
+.help-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: var(--mtt-size-md);
+  font-weight: 700;
+  line-height: 1;
+  border-radius: var(--mtt-radius-pill);
 }
 
 /* ---------- Form fields (name / room code) ---------- */
