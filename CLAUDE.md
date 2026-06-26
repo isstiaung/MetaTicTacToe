@@ -99,6 +99,15 @@ Durable Objects** (via `partyserver`; one Durable Object = one match room, keyed
   emulator** uses `10.0.2.2:1999`, a **physical device** uses the dev machine's LAN IP. Deploy with
   `npm run deploy -w @mtt/party` (`wrangler deploy`, owner's Cloudflare login) →
   `metatictactoe.<account>.workers.dev`, and point the host there. See `DEPLOY.md`.
+- **Abuse gate (anonymous, no accounts):** because the Worker is publicly addressable, the
+  `fetch` handler gates the socket in `onBeforeConnect` — it rejects (401) any connection without a
+  valid short-lived HMAC **session token**, and rate-limits per IP (`ratelimits` in
+  `wrangler.jsonc`). The browser earns a token by passing an invisible **Cloudflare Turnstile**
+  challenge (`web/src/online/Turnstile.tsx`) and exchanging it at `POST /auth`; the socket reuses
+  the token across reconnects. The pure token logic lives in `packages/party/src/auth.ts` (unit
+  tested). The gate is **fail-open / disabled until its secrets (`TURNSTILE_SECRET`, `AUTH_SECRET`)
+  are set**, so dev and CI need no setup. Mobile doesn't mint a token yet (web-only for now). See
+  `DEPLOY.md` §4.
 
 Scoped out for now: random matchmaking, accounts, spectators, chat, match history.
 
