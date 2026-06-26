@@ -5,7 +5,7 @@ import type { RoomPlayers, Seat } from '@mtt/protocol';
 import { MetaBoard } from '../components/MetaBoard';
 import { ResultModal } from '../components/ResultModal';
 import { Score } from '../components/Score';
-import { useOnlineGame } from './useOnlineGame';
+import { roomShareUrl, useOnlineGame } from './useOnlineGame';
 import { cn } from '../theme';
 
 interface OnlineGameProps {
@@ -59,9 +59,10 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
     if (state.winner === null) setResultDismissed(false);
   }, [state.winner]);
 
+  // Copy a shareable link that auto-joins this room when opened by a friend.
   const copyCode = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(roomShareUrl(code));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -92,11 +93,11 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
                 ? 'Waiting for opponent…'
                 : 'Joining game…'}
           </h2>
-          <p className="lobby__sub">Share this code so a friend can join:</p>
+          <p className="lobby__sub">Share this link (or the code) so a friend can join:</p>
           <div className="code-chip">
             <span className="code-chip__value">{code}</span>
             <button type="button" className="btn btn--ghost code-chip__copy" onClick={copyCode}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? 'Link copied' : 'Copy link'}
             </button>
           </div>
           {you !== null && (

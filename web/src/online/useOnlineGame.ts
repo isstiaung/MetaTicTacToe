@@ -83,6 +83,46 @@ export function normalizeRoomCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+const ROOM_PARAM = 'room';
+
+/** Read a normalised room code from the current URL (`?room=CODE`), or ''. */
+export function getRoomFromUrl(): string {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return normalizeRoomCode(params.get(ROOM_PARAM) ?? '');
+  } catch {
+    return '';
+  }
+}
+
+/** Build a shareable absolute URL that auto-joins the given room code. */
+export function roomShareUrl(code: string): string {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set(ROOM_PARAM, code);
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * Reflect the active room in the address bar (`?room=CODE`) without adding a
+ * history entry, so a refresh rejoins and the link is always shareable. Pass
+ * `null` to clear it (e.g. on leaving the room).
+ */
+export function setRoomInUrl(code: string | null): void {
+  try {
+    const url = new URL(window.location.href);
+    if (code) url.searchParams.set(ROOM_PARAM, code);
+    else url.searchParams.delete(ROOM_PARAM);
+    window.history.replaceState(null, '', url.toString());
+  } catch {
+    // History/URL unavailable — auto-join via link simply won't persist.
+  }
+}
+
 export interface OnlineGame {
   state: GameState;
   status: RoomStatus;
