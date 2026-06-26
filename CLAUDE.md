@@ -96,9 +96,11 @@ Durable Objects** (via `partyserver`; one Durable Object = one match room, keyed
   components are reused unchanged; online just feeds server state and locks input off-turn.
 - **Host config:** web reads `VITE_PARTYKIT_HOST` (default `127.0.0.1:1999`); mobile reads
   `app.json` `extra.partykitHost`. Local dev: web / iOS-sim use `127.0.0.1:1999`, the **Android
-  emulator** uses `10.0.2.2:1999`, a **physical device** uses the dev machine's LAN IP. Deploy with
-  `npm run deploy -w @mtt/party` (`wrangler deploy`, owner's Cloudflare login) →
-  `metatictactoe.<account>.workers.dev`, and point the host there. See `DEPLOY.md`.
+  emulator** uses `10.0.2.2:1999`, a **physical device** uses the dev machine's LAN IP. Production is
+  **two Cloudflare Workers** — `metatictactoe` (game server, `party.mttt.isstiaung.me`,
+  `packages/party/wrangler.jsonc`) and `metatictactoe-web` (the Vite app, `mttt.isstiaung.me`,
+  `web/wrangler.jsonc`) — both auto-deployed by **Cloudflare Workers Builds** on merge to the
+  `deploy-app` branch (no manual deploys, no GitHub Actions). See `DEPLOY.md`.
 - **Abuse gate (anonymous, no accounts):** because the Worker is publicly addressable, the
   `fetch` handler gates the socket in `onBeforeConnect` — it rejects (401) any connection without a
   valid short-lived HMAC **session token**, and rate-limits per IP (`ratelimits` in

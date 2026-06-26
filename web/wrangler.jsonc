@@ -1,0 +1,21 @@
+{
+  // Cloudflare Worker for the WEB APP only — an assets-only worker (no server script) that serves
+  // the built Vite app (web/dist) as a static SPA. The GAME SERVER is a separate worker
+  // (packages/party/wrangler.jsonc, reached at party.mttt.isstiaung.me).
+  //
+  // $schema lives in the repo-root node_modules (this is a standalone project with no wrangler dep;
+  // CI/manual deploys run `wrangler` from the root install — see DEPLOY.md).
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "metatictactoe-web",
+  "compatibility_date": "2025-01-01",
+  // The site players visit. custom_domain:true makes `wrangler deploy` provision mttt.isstiaung.me
+  // (the isstiaung.me zone must be on this Cloudflare account, and the domain must not still be
+  // attached to the party worker — see DEPLOY.md one-time setup).
+  "routes": [{ "pattern": "mttt.isstiaung.me", "custom_domain": true }],
+  // No "main": assets-only worker. single-page-application = unknown paths fall back to index.html
+  // so client-side routing / deep links work. Build it first: `npm run build --prefix web`.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
