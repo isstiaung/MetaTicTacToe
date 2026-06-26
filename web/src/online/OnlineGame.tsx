@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { boardScore, isLegalMove } from '@mtt/engine';
 import type { Outcome } from '@mtt/engine';
 import type { RoomPlayers, Seat } from '@mtt/protocol';
@@ -6,6 +6,8 @@ import { MetaBoard } from '../components/MetaBoard';
 import { ResultModal } from '../components/ResultModal';
 import { Score } from '../components/Score';
 import { roomShareUrl, useOnlineGame } from './useOnlineGame';
+import { exchangeTurnstileToken, hasSessionToken, TURNSTILE_SITE_KEY } from './auth';
+import { Turnstile } from './Turnstile';
 import { cn } from '../theme';
 
 interface OnlineGameProps {
@@ -83,7 +85,32 @@ function MoveTimer({ deadline, seat }: { deadline: number; seat: Seat }) {
 }
 
 export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
-  const game = useOnlineGame(code, name);
+  // Abuse gate: a session token must be minted (via Turnstile) before the socket
+  // can connect. When arriving from a shared `?room=` link we skip the online
+  // menu where this normally happens, so mint it here too — otherwise the socket
+  // hits the gate with an empty token and is stuck "Connecting…" forever. If a
+  // token is already cached (e.g. created via the menu), connect immediately.
+  const [authReady, setAuthReady] = useState(hasSessionToken);
+  const [authError, setAuthError] = useState(false);
+  const [turnstileKey, setTurnstileKey] = useState(0);
+
+  const handleVerify = useCallback(async (turnstileToken: string) => {
+    try {
+      await exchangeTurnstileToken(turnstileToken);
+      setAuthError(false);
+      setAuthReady(true);
+    } catch {
+      setAuthError(true);
+    }
+  }, []);
+
+  const retryAuth = useCallback(() => {
+    setAuthError(false);
+    setTurnstileKey((k) => k + 1);
+  }, []);
+
+  // Hold off connecting (empty `code`) until we hold a valid session token.
+  const game = useOnlineGame(authReady ? code : '', name);
   const { state, status, you, players, rematch, connected, turnDeadline, error, sendMove, sendRematch } =
     game;
   const [copied, setCopied] = useState(false);
@@ -122,11 +149,13 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
 
         <div className="lobby">
           <h2 className="lobby__title">
-            {!connected
-              ? 'Connecting…'
-              : waitingForOpponent
-                ? 'Waiting for opponent…'
-                : 'Joining game…'}
+            {!authReady
+              ? 'Verifying…'
+              : !connected
+                ? 'Connecting…'
+                : waitingForOpponent
+                  ? 'Waiting for opponent…'
+                  : 'Joining game…'}
           </h2>
           <p className="lobby__sub">Share this link (or the code) so a friend can join:</p>
           <div className="code-chip">
@@ -135,6 +164,30 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
               {copied ? 'Link copied' : 'Copy link'}
             </button>
           </div>
+
+          {/* Invisible/managed Turnstile — only shows UI if interaction is needed. */}
+          {!authReady && !authError && (
+            <div className="online-auth">
+              <Turnstile
+                key={turnstileKey}
+                siteKey={TURNSTILE_SITE_KEY}
+                onVerify={handleVerify}
+                onError={() => setAuthError(true)}
+              />
+              <span className="status__hint">Verifying you’re human…</span>
+            </div>
+          )}
+          {authError && (
+            <div className="online-auth">
+              <span className="status__hint" style={{ color: 'var(--mtt-danger)' }}>
+                Verification failed.
+              </span>
+              <button type="button" className="btn btn--ghost" onClick={retryAuth}>
+                Retry
+              </button>
+            </div>
+          )}
+
           {you !== null && (
             <p className="lobby__seat">
               You are{' '}
