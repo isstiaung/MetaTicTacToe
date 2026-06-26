@@ -8,8 +8,10 @@ import { OnlineMenu } from './online/OnlineMenu';
 import { OnlineGame } from './online/OnlineGame';
 import {
   generateRoomCode,
+  getRoomFromUrl,
   getStoredName,
   normalizeRoomCode,
+  setRoomInUrl,
   storeName,
 } from './online/useOnlineGame';
 import { installThemeVars } from './theme';
@@ -23,8 +25,11 @@ type Screen = 'landing' | 'game' | 'online-menu' | 'online-game';
 const HUMAN: 'X' = 'X';
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('landing');
-  const [mode, setMode] = useState<Mode>('two-player');
+  // A `?room=CODE` link (e.g. shared by a friend) auto-joins that room on load.
+  const initialRoom = getRoomFromUrl();
+
+  const [screen, setScreen] = useState<Screen>(initialRoom ? 'online-game' : 'landing');
+  const [mode, setMode] = useState<Mode>(initialRoom ? 'online' : 'two-player');
   const [difficulty, setDifficulty] = useState<Difficulty>('hard');
   const [state, setState] = useState<GameState>(createGame);
   const [thinking, setThinking] = useState(false);
@@ -33,7 +38,7 @@ export function App() {
 
   // Online play: persisted display name + the active room code.
   const [name, setName] = useState(getStoredName);
-  const [onlineCode, setOnlineCode] = useState('');
+  const [onlineCode, setOnlineCode] = useState(initialRoom);
 
   // Bumped on every new game / mode change so an in-flight AI computation from
   // a previous game can detect it is stale and bail out before committing.
@@ -58,6 +63,7 @@ export function App() {
   const goHome = useCallback(() => {
     genRef.current += 1;
     setThinking(false);
+    setRoomInUrl(null);
     setScreen('landing');
   }, []);
 
@@ -69,12 +75,15 @@ export function App() {
   const openOnlineMenu = useCallback(() => {
     setMode('online');
     setOnlineCode('');
+    setRoomInUrl(null);
     setScreen('online-menu');
   }, []);
 
   // Host a new room: generate a short code, then connect (the hook joins on open).
   const createOnline = useCallback(() => {
-    setOnlineCode(generateRoomCode());
+    const code = generateRoomCode();
+    setOnlineCode(code);
+    setRoomInUrl(code);
     setScreen('online-game');
   }, []);
 
@@ -82,6 +91,7 @@ export function App() {
     const normalized = normalizeRoomCode(code);
     if (!normalized) return;
     setOnlineCode(normalized);
+    setRoomInUrl(normalized);
     setScreen('online-game');
   }, []);
 
@@ -89,6 +99,7 @@ export function App() {
   // which sends `leave` and closes the socket).
   const leaveOnline = useCallback(() => {
     setOnlineCode('');
+    setRoomInUrl(null);
     setScreen('online-menu');
   }, []);
 
