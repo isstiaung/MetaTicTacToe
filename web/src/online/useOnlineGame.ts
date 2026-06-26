@@ -131,6 +131,8 @@ export interface OnlineGame {
   rematch: RematchState;
   connected: boolean;
   code: string;
+  /** Epoch-ms deadline for the current move (server auto-plays on lapse), or null. */
+  turnDeadline: number | null;
   /** A transient, human-readable error surfaced to the UI (e.g. illegal move). */
   error: string | null;
   sendMove: (board: number, cell: number) => void;
@@ -149,6 +151,7 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
   const [players, setPlayers] = useState<RoomPlayers>({});
   const [rematch, setRematch] = useState<RematchState>({ X: false, O: false });
   const [connected, setConnected] = useState(false);
+  const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
@@ -211,6 +214,7 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
           setStatus(msg.status);
           setPlayers(msg.players);
           setRematch(msg.rematch);
+          setTurnDeadline(msg.turnDeadline);
           break;
         case 'error':
           if (msg.code === 'not_joined') {
@@ -272,6 +276,7 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
     rematch,
     connected,
     code,
+    turnDeadline,
     error,
     sendMove,
     sendRematch,

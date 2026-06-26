@@ -17,7 +17,7 @@
 import { Server, routePartykitRequest } from 'partyserver';
 import type { Connection } from 'partyserver';
 import type { ClientMessage } from '@mtt/protocol';
-import { createRoom, disconnect, reduce, syncMessage, type RoomState } from './room';
+import { applyTimeout, createRoom, disconnect, reduce, syncMessage, type RoomState } from './room';
 import { authorizeConnection, issueSessionToken, verifyTurnstile } from './auth';
 
 /** Cloudflare's rate-limit binding surface (configured under `ratelimits` in wrangler.jsonc). */
@@ -55,13 +55,64 @@ export class GameServer extends Server<Env> {
 
   private async getRoom(): Promise<RoomState> {
     if (!this.room) {
-      this.room = (await this.ctx.storage.get<RoomState>('room')) ?? createRoom(this.name);
+      const stored = await this.ctx.storage.get<RoomState>('room');
+      // Coalesce `turnDeadline` so rooms persisted before the move clock existed
+      // load with a defined (null) value rather than `undefined`.
+      this.room = stored
+        ? { ...stored, turnDeadline: stored.turnDeadline ?? null }
+        : createRoom(this.name);
     }
     return this.room;
   }
 
   private async persist(): Promise<void> {
     if (this.room) await this.ctx.storage.put('room', this.room);
+  }
+
+  /** True while at least one seat is connected — the move clock only runs then. */
+  private someoneConnected(room: RoomState): boolean {
+    return Boolean(room.seats.X?.connected || room.seats.O?.connected);
+  }
+
+  /**
+   * Keep the Durable Object alarm in lockstep with the room's move clock: armed at
+   * `turnDeadline` while a game is in progress with someone watching, cleared
+   * otherwise (game over, lobby, or both players gone — which pauses the clock).
+   */
+  private async syncAlarm(): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const shouldArm =
+      room.status === 'playing' && room.turnDeadline !== null && this.someoneConnected(room);
+    const existing = await this.ctx.storage.getAlarm();
+    if (shouldArm) {
+      if (existing !== room.turnDeadline) await this.ctx.storage.setAlarm(room.turnDeadline!);
+    } else if (existing !== null) {
+      await this.ctx.storage.deleteAlarm();
+    }
+  }
+
+  /**
+   * Fired by the runtime when the move clock lapses. Auto-plays an `easy` move for
+   * the current player, broadcasts it, then re-arms for the next turn. Guards
+   * against firing early (a move may have pushed the deadline) and against running
+   * with nobody connected.
+   */
+  async onAlarm(): Promise<void> {
+    const room = await this.getRoom();
+    const now = Date.now();
+    if (
+      this.someoneConnected(room) &&
+      room.status === 'playing' &&
+      room.turnDeadline !== null &&
+      now + 1_000 >= room.turnDeadline
+    ) {
+      const result = applyTimeout(room, now);
+      this.room = result.room;
+      if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
+      await this.persist();
+    }
+    await this.syncAlarm();
   }
 
   async onConnect(conn: Connection<ConnState>) {
@@ -86,7 +137,7 @@ export class GameServer extends Server<Env> {
     const room = await this.getRoom();
     const connPlayerId = msg.type === 'join' ? msg.playerId : sender.state?.playerId;
 
-    const result = reduce(room, connPlayerId, msg);
+    const result = reduce(room, connPlayerId, msg, Date.now());
     this.room = result.room;
 
     // Bind the connection to its player id once a join is accepted (an `assigned` reply).
@@ -97,6 +148,7 @@ export class GameServer extends Server<Env> {
     for (const m of result.reply) sender.send(JSON.stringify(m));
     if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
+    await this.syncAlarm();
   }
 
   async onClose(conn: Connection<ConnState>) {
@@ -107,6 +159,9 @@ export class GameServer extends Server<Env> {
     this.room = result.room;
     if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
+    // If that was the last connection, syncAlarm pauses the clock; otherwise it
+    // keeps running so the remaining player still gets an auto-move on timeout.
+    await this.syncAlarm();
   }
 }
 

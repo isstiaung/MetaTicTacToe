@@ -59,6 +59,12 @@ export type ServerMessage =
       game: GameState;
       players: RoomPlayers;
       rematch: RematchState;
+      /**
+       * Absolute epoch-ms deadline for the current player's move, or `null` when
+       * no clock is running (not `playing`). When it lapses the server auto-plays
+       * a move for the current player. Clients render `deadline - Date.now()`.
+       */
+      turnDeadline: number | null;
     }
   | { type: 'error'; code: ServerErrorCode; message: string };
 

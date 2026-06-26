@@ -17,6 +17,9 @@ import { Score } from '../components/Score';
 import { Button } from '../components/Button';
 import { useOnlineGame } from '../online/useOnlineGame';
 
+/** ~14% tint of `palette.danger` (#E5484D) for the urgent move-timer background. */
+const URGENT_TIMER_BG = 'rgba(229, 72, 77, 0.14)';
+
 interface OnlineGameScreenProps {
   /** The room code to connect to (remounts the hook when it changes via `key`). */
   code: string;
@@ -32,6 +35,7 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
     rematch,
     connected,
     code: roomCode,
+    turnDeadline,
     error,
     sendMove,
     sendRematch,
@@ -184,6 +188,9 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
             </Text>
           </View>
         )}
+        {!state.winner && status === 'playing' && turnDeadline !== null ? (
+          <MoveTimer deadline={turnDeadline} seat={current} />
+        ) : null}
         <Text style={styles.statusText} allowFontScaling={false}>
           {connNote ?? statusLine}
         </Text>
@@ -227,6 +234,38 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+/**
+ * Live countdown for the current move, ticking once a second off the server's
+ * absolute `deadline`. Informational only — the server auto-plays an `easy` move
+ * when it lapses, and each `sync` re-supplies the deadline so this self-corrects.
+ */
+function MoveTimer({ deadline, seat }: { deadline: number; seat: Player }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  const remaining = Math.max(0, deadline - now);
+  const totalSec = Math.ceil(remaining / 1000);
+  const label = `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`;
+  const urgent = remaining <= 15_000;
+  const color = urgent ? palette.danger : seat === 'X' ? palette.x : palette.o;
+  const bg = urgent ? URGENT_TIMER_BG : seat === 'X' ? palette.xSoft : palette.oSoft;
+
+  return (
+    <View style={[styles.moveTimer, { backgroundColor: bg }]}>
+      <Text style={[styles.moveTimerTime, { color }]} allowFontScaling={false}>
+        {label}
+      </Text>
+      <Text style={[styles.moveTimerUnit, { color }]} allowFontScaling={false}>
+        left
+      </Text>
     </View>
   );
 }
@@ -423,6 +462,24 @@ const styles = StyleSheet.create({
   turnText: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold as TextStyle['fontWeight'],
+  },
+  moveTimer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+  },
+  moveTimerTime: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold as TextStyle['fontWeight'],
+    fontVariant: ['tabular-nums'],
+  },
+  moveTimerUnit: {
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold as TextStyle['fontWeight'],
+    opacity: 0.7,
   },
   statusText: {
     fontSize: typography.size.sm,
