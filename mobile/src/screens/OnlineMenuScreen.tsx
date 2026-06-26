@@ -98,6 +98,10 @@ export function OnlineMenuScreen({
           Tip: add a name so your opponent knows who you are.
         </Text>
       ) : null}
+
+      <Text style={styles.finePrint} allowFontScaling={false}>
+        Inactive rooms are freed after 6 hours.
+      </Text>
     </View>
   );
 }
@@ -166,6 +170,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: typography.size.xs,
     color: palette.muted,
+  },
+  finePrint: {
+    textAlign: 'center',
+    fontSize: typography.size.xs,
+    color: palette.muted,
+    paddingTop: space.sm,
     paddingBottom: space.xl,
   },
 });

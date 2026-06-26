@@ -95,6 +95,10 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
               {error}
             </Text>
           ) : null}
+
+          <Text style={styles.finePrint} allowFontScaling={false}>
+            Inactive rooms are freed after 6 hours.
+          </Text>
         </View>
 
         <View style={styles.footer}>
@@ -207,7 +211,11 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
         </Text>
       ) : null}
 
-      <View style={styles.footer} />
+      <View style={styles.footer}>
+        <Text style={styles.finePrint} allowFontScaling={false}>
+          Inactive rooms are freed after 6 hours.
+        </Text>
+      </View>
 
       {/* Result + rematch. The "Play again" button asks for a rematch; once we've
           asked (but the opponent hasn't), a pending notice layers over the overlay. */}
@@ -401,6 +409,11 @@ const styles = StyleSheet.create({
     color: palette.danger,
     textAlign: 'center',
     paddingVertical: space.xs,
+  },
+  finePrint: {
+    fontSize: typography.size.xs,
+    color: palette.muted,
+    textAlign: 'center',
   },
 
   // Players header

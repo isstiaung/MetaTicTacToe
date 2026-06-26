@@ -197,6 +197,7 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
             </p>
           )}
           {error && <p className="status__hint" style={{ color: 'var(--mtt-danger)' }}>{error}</p>}
+          <p className="fine-print">Inactive rooms are freed after 6 hours.</p>
         </div>
       </main>
     );
@@ -315,6 +316,8 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
       </div>
 
       <MetaBoard state={state} locked={locked} onPlay={handlePlay} />
+
+      <p className="fine-print">Inactive rooms are freed after 6 hours.</p>
 
       {gameOver && !resultDismissed && (
         <ResultModal
