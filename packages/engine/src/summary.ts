@@ -27,24 +27,31 @@ export interface SummaryOptions {
   url?: string;
 }
 
-const GLYPH: Record<'X' | 'O' | 'draw', string> = { X: 'X', O: 'O', draw: '–' };
+/**
+ * Emoji glyphs for the meta board: ❌ for X, ⭕ for O (self-explanatory in chat),
+ * ⬜ for a drawn board and ⬛ for an unclaimed one (in-progress shares). Emoji so
+ * the grid renders as a tidy square block — Wordle-style — in chat apps, rather
+ * than ASCII that messaging clients reflow or mistake for a code block.
+ */
+const MARK: Record<'X' | 'O' | 'draw', string> = { X: '❌', O: '⭕', draw: '⬜' };
+const EMPTY_MARK = '⬛';
 
-/** A small ASCII rendering of the meta board (winner of each sub-board). */
-function metaGridAscii(state: GameState): string {
+/** A 3×3 emoji rendering of the meta board (winner of each sub-board). */
+function metaGridEmoji(state: GameState): string {
   const cell = (i: number): string => {
     const w = state.boards[i].winner;
-    return w ? GLYPH[w] : '·';
+    return w ? MARK[w] : EMPTY_MARK;
   };
   const rows: string[] = [];
   for (let r = 0; r < 3; r++) {
-    rows.push(` ${cell(r * 3)} | ${cell(r * 3 + 1)} | ${cell(r * 3 + 2)} `);
+    rows.push(`${cell(r * 3)}${cell(r * 3 + 1)}${cell(r * 3 + 2)}`);
   }
-  return rows.join('\n-----------\n');
+  return rows.join('\n');
 }
 
 /**
  * A shareable, plain-text summary of a finished (or in-progress) game:
- * the result, the board-won score, and an ASCII snapshot of the meta board.
+ * the result, the board-won score, and an emoji snapshot of the meta board.
  * Both clients use this for the "Share" action.
  */
 export function gameSummaryText(state: GameState, opts: SummaryOptions = {}): string {
@@ -61,9 +68,9 @@ export function gameSummaryText(state: GameState, opts: SummaryOptions = {}): st
   const lines = [
     'Meta Tic-Tac-Toe',
     result,
-    `Boards won — X: ${score.X}  O: ${score.O}`,
+    `Boards won — ${MARK.X} ${score.X}  ${MARK.O} ${score.O}`,
     '',
-    metaGridAscii(state),
+    metaGridEmoji(state),
   ];
   if (opts.url) lines.push('', opts.url);
   return lines.join('\n');

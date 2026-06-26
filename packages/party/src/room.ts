@@ -125,14 +125,16 @@ function setSeat(room: RoomState, seat: Seat, value: SeatState): RoomState {
 /**
  * Derive the move clock for the room's current status.
  *
- * - Not `playing` → `null` (no clock).
+ * - Not `playing`, or **the opening move** (no move played yet) → `null` (no clock).
+ *   Leaving the first move untimed gives both players time to read the rules
+ *   explainer before any countdown begins; the clock kicks in from move two.
  * - A new turn just began (`fresh`) → a fresh `now + TURN_DURATION_MS` deadline.
  * - Same turn continuing (e.g. a reconnect) → keep the running deadline, but if it
  *   has already lapsed or was paused (both players had left), restart it so a
  *   returning player isn't auto-moved the instant they reconnect.
  */
 function nextDeadline(room: RoomState, now: number, fresh: boolean): number | null {
-  if (room.status !== 'playing') return null;
+  if (room.status !== 'playing' || room.game.lastMove === null) return null;
   if (fresh || room.turnDeadline === null || room.turnDeadline <= now) {
     return now + TURN_DURATION_MS;
   }

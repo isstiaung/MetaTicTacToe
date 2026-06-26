@@ -2,6 +2,7 @@ import type { GameState, Player } from '@mtt/engine';
 import { boardScore } from '@mtt/engine';
 import { MetaBoard } from './MetaBoard';
 import { Score } from './Score';
+import { HelpButton } from './HelpButton';
 import { cn } from '../theme';
 
 interface GameScreenProps {
@@ -92,6 +93,7 @@ export function GameScreen({
           <button type="button" className="btn btn--ghost" onClick={onReset}>
             New game
           </button>
+          <HelpButton />
         </div>
       </div>
 

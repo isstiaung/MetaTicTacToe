@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardScore, isLegalMove } from '@mtt/engine';
 import type { Outcome } from '@mtt/engine';
 import type { RoomPlayers, Seat } from '@mtt/protocol';
@@ -8,6 +8,7 @@ import { Score } from '../components/Score';
 import { roomShareUrl, useOnlineGame } from './useOnlineGame';
 import { exchangeTurnstileToken, hasSessionToken, TURNSTILE_SITE_KEY } from './auth';
 import { Turnstile } from './Turnstile';
+import { HelpButton } from '../components/HelpButton';
 import { cn } from '../theme';
 
 interface OnlineGameProps {
@@ -16,6 +17,8 @@ interface OnlineGameProps {
   name: string;
   /** Leave the room and return to the online menu. */
   onLeave: () => void;
+  /** Fired once when the game first becomes playable (both seats filled). */
+  onGameStart?: () => void;
 }
 
 function seatName(players: RoomPlayers, seat: Seat): string {
@@ -84,7 +87,7 @@ function MoveTimer({ deadline, seat }: { deadline: number; seat: Seat }) {
   );
 }
 
-export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
+export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps) {
   // Abuse gate: a session token must be minted (via Turnstile) before the socket
   // can connect. When arriving from a shared `?room=` link we skip the online
   // menu where this normally happens, so mint it here too — otherwise the socket
@@ -121,6 +124,15 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
     if (state.winner === null) setResultDismissed(false);
   }, [state.winner]);
 
+  // Auto-show the rules explainer once, the moment the game first becomes playable.
+  const gameStartedRef = useRef(false);
+  useEffect(() => {
+    if (status === 'playing' && !gameStartedRef.current) {
+      gameStartedRef.current = true;
+      onGameStart?.();
+    }
+  }, [status, onGameStart]);
+
   // Copy a shareable link that auto-joins this room when opened by a friend.
   const copyCode = async () => {
     try {
@@ -144,7 +156,9 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
           <span className="topbar__mode" style={{ color: 'var(--mtt-muted)', fontSize: 'var(--mtt-size-sm)' }}>
             Online
           </span>
-          <div className="topbar__actions" />
+          <div className="topbar__actions">
+            <HelpButton />
+          </div>
         </div>
 
         <div className="lobby">
@@ -258,6 +272,7 @@ export function OnlineGame({ code, name, onLeave }: OnlineGameProps) {
         </span>
         <div className="topbar__actions">
           <Score state={state} />
+          <HelpButton />
         </div>
       </div>
 

@@ -56,6 +56,15 @@ export function getStoredName(): string {
   }
 }
 
+/** Whether the player has ever set a display name (vs. the "Player" default). */
+export function hasStoredName(): boolean {
+  try {
+    return (localStorage.getItem(NAME_KEY) ?? '').trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Persist the display name for future sessions. */
 export function storeName(name: string): void {
   try {

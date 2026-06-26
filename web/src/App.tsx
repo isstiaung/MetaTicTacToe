@@ -4,12 +4,15 @@ import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';
 import { Landing } from './components/Landing';
 import { GameScreen } from './components/GameScreen';
 import { ResultModal } from './components/ResultModal';
+import { RulesModal } from './components/RulesModal';
 import { OnlineMenu } from './online/OnlineMenu';
 import { OnlineGame } from './online/OnlineGame';
+import { JoinName } from './online/JoinName';
 import {
   generateRoomCode,
   getRoomFromUrl,
   getStoredName,
+  hasStoredName,
   normalizeRoomCode,
   setRoomInUrl,
   storeName,
@@ -19,22 +22,33 @@ import { installThemeVars } from './theme';
 installThemeVars();
 
 type Mode = 'two-player' | 'vs-computer' | 'online';
-type Screen = 'landing' | 'game' | 'online-menu' | 'online-game';
+type Screen = 'landing' | 'game' | 'online-menu' | 'online-join' | 'online-game';
+
+/** localStorage flag: the rules explainer has auto-shown once already. */
+const SEEN_RULES_KEY = 'mtt.seenRules';
 
 /** The human is always X when playing the computer. */
 const HUMAN: 'X' = 'X';
 
 export function App() {
   // A `?room=CODE` link (e.g. shared by a friend) auto-joins that room on load.
+  // A first-time joiner (no saved name) gets a name-entry step before the board.
   const initialRoom = getRoomFromUrl();
+  const initialScreen: Screen = initialRoom
+    ? hasStoredName()
+      ? 'online-game'
+      : 'online-join'
+    : 'landing';
 
-  const [screen, setScreen] = useState<Screen>(initialRoom ? 'online-game' : 'landing');
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [mode, setMode] = useState<Mode>(initialRoom ? 'online' : 'two-player');
   const [difficulty, setDifficulty] = useState<Difficulty>('hard');
   const [state, setState] = useState<GameState>(createGame);
   const [thinking, setThinking] = useState(false);
   // Whether the player has dismissed the result dialog (game stays over).
   const [resultDismissed, setResultDismissed] = useState(false);
+  // The rules explainer (also openable any time via the "?" button).
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   // Online play: persisted display name + the active room code.
   const [name, setName] = useState(getStoredName);
@@ -43,15 +57,38 @@ export function App() {
   // Bumped on every new game / mode change so an in-flight AI computation from
   // a previous game can detect it is stale and bail out before committing.
   const genRef = useRef(0);
+  // Guards the once-per-player auto-open of the rules explainer (belt-and-braces
+  // alongside the localStorage flag, in case storage is unavailable).
+  const autoShownRef = useRef(false);
 
-  const startGame = useCallback((nextMode: 'two-player' | 'vs-computer') => {
-    genRef.current += 1;
-    setMode(nextMode);
-    setState(createGame());
-    setThinking(false);
-    setResultDismissed(false);
-    setScreen('game');
+  // Open the rules explainer automatically the first time a player starts a game.
+  const maybeAutoShowRules = useCallback(() => {
+    if (autoShownRef.current) return;
+    try {
+      if (localStorage.getItem(SEEN_RULES_KEY)) {
+        autoShownRef.current = true;
+        return;
+      }
+      localStorage.setItem(SEEN_RULES_KEY, '1');
+    } catch {
+      // Storage unavailable — the ref still prevents repeat opens this session.
+    }
+    autoShownRef.current = true;
+    setRulesOpen(true);
   }, []);
+
+  const startGame = useCallback(
+    (nextMode: 'two-player' | 'vs-computer') => {
+      genRef.current += 1;
+      setMode(nextMode);
+      setState(createGame());
+      setThinking(false);
+      setResultDismissed(false);
+      setScreen('game');
+      maybeAutoShowRules();
+    },
+    [maybeAutoShowRules],
+  );
 
   const resetGame = useCallback(() => {
     genRef.current += 1;
@@ -181,8 +218,23 @@ export function App() {
         />
       )}
 
+      {screen === 'online-join' && (
+        <JoinName
+          code={onlineCode}
+          name={name}
+          onChangeName={changeName}
+          onJoin={() => setScreen('online-game')}
+          onBack={goHome}
+        />
+      )}
+
       {screen === 'online-game' && (
-        <OnlineGame code={onlineCode} name={name} onLeave={leaveOnline} />
+        <OnlineGame
+          code={onlineCode}
+          name={name}
+          onLeave={leaveOnline}
+          onGameStart={maybeAutoShowRules}
+        />
       )}
 
       {screen === 'game' && (
@@ -206,6 +258,8 @@ export function App() {
           )}
         </>
       )}
+
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }

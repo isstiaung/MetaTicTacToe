@@ -1,4 +1,5 @@
 import type { Difficulty } from '@mtt/engine';
+import { HelpButton } from './HelpButton';
 import { cn } from '../theme';
 
 const RULES_URL = 'https://isstiaung.me/meta-tictactoe-rules-6ac9bc68d079';
@@ -80,10 +81,11 @@ export function Landing({
         </div>
       </div>
 
-      <div className="landing__footer">
+      <div className="landing__footer landing__footer--row">
         <a className="rules-link" href={RULES_URL} target="_blank" rel="noopener noreferrer">
           How to play (Rules)
         </a>
+        <HelpButton />
       </div>
     </main>
   );
