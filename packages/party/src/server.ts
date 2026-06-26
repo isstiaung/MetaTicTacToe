@@ -7,15 +7,40 @@
  *
  * The Durable Object binding is named `Main`, which partyserver maps to the default party "main"
  * that partysocket uses — so the web and mobile clients connect unchanged.
+ *
+ * Abuse prevention (see `auth.ts`): the `fetch` handler exposes a `/auth` endpoint that trades a
+ * Cloudflare Turnstile solve for a short-lived session token, and `onBeforeConnect` rejects any
+ * socket that doesn't carry a valid one — before a Durable Object is created. Both the `/auth`
+ * mint and the connection are rate-limited per IP. The gate is active only when its secrets are
+ * configured, so local `wrangler dev` stays open and zero-config.
  */
 import { Server, routePartykitRequest } from 'partyserver';
 import type { Connection } from 'partyserver';
 import type { ClientMessage } from '@mtt/protocol';
 import { createRoom, disconnect, reduce, syncMessage, type RoomState } from './room';
+import { authorizeConnection, issueSessionToken, verifyTurnstile } from './auth';
+
+/** Cloudflare's rate-limit binding surface (configured under `ratelimits` in wrangler.jsonc). */
+interface RateLimit {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 
 interface Env {
   Main: DurableObjectNamespace;
+  /** Per-IP cap on session-token minting (the expensive, abuse-prone path). */
+  AUTH_LIMITER?: RateLimit;
+  /** Per-IP cap on socket connections (blunts connection floods). */
+  CONNECT_LIMITER?: RateLimit;
+  /** Turnstile secret key (set via `wrangler secret put`). Unset → challenge check skipped (dev). */
+  TURNSTILE_SECRET?: string;
+  /** HMAC secret for session tokens (set via `wrangler secret put`). Unset → gate disabled (dev). */
+  AUTH_SECRET?: string;
+  /** Allowed browser origin for `/auth` CORS. Defaults to `*`. */
+  WEB_ORIGIN?: string;
 }
+
+/** Session tokens last long enough to outlive any single match, so reconnects never re-challenge. */
+const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
 /** Per-connection state (survives WebSocket hibernation). */
 interface ConnState {
@@ -85,8 +110,76 @@ export class GameServer extends Server<Env> {
   }
 }
 
+function corsHeaders(env: Env): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': env.WEB_ORIGIN || '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function json(data: unknown, status: number, headers: Record<string, string>): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers },
+  });
+}
+
+/**
+ * `POST /auth` — trade a Turnstile token for a session token. Rate-limited per IP. In production
+ * the Turnstile check runs; in dev (no secret) it's skipped and a placeholder token is returned
+ * (the connect gate is also disabled there, so any value passes).
+ */
+async function handleAuth(request: Request, env: Env): Promise<Response> {
+  const cors = corsHeaders(env);
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  if (request.method !== 'POST') {
+    return json({ error: 'method_not_allowed' }, 405, cors);
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const limited = await env.AUTH_LIMITER?.limit({ key: ip });
+  if (limited && !limited.success) return json({ error: 'rate_limited' }, 429, cors);
+
+  let turnstileToken = '';
+  try {
+    const body = (await request.json()) as { turnstileToken?: string };
+    turnstileToken = body.turnstileToken ?? '';
+  } catch {
+    // Missing/invalid body — falls through; rejected below if Turnstile is required.
+  }
+
+  if (env.TURNSTILE_SECRET) {
+    const human = await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET, ip);
+    if (!human) return json({ error: 'challenge_failed' }, 403, cors);
+  }
+
+  const token = env.AUTH_SECRET
+    ? await issueSessionToken(env.AUTH_SECRET, SESSION_TTL_SECONDS)
+    : 'dev';
+  return json({ token }, 200, cors);
+}
+
+/** Reject the socket upgrade (pre-Durable-Object) unless it's under the rate cap and authorized. */
+async function gateConnection(request: Request, env: Env): Promise<Response | void> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const limited = await env.CONNECT_LIMITER?.limit({ key: ip });
+  if (limited && !limited.success) return new Response('rate limited', { status: 429 });
+
+  const ok = await authorizeConnection(request.url, env.AUTH_SECRET);
+  if (!ok) return new Response('unauthorized', { status: 401 });
+  // returning void lets routePartykitRequest establish the connection
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return (await routePartykitRequest(request, env)) || new Response('Not Found', { status: 404 });
+    const url = new URL(request.url);
+    if (url.pathname === '/auth') return handleAuth(request, env);
+    return (
+      (await routePartykitRequest(request, env, {
+        onBeforeConnect: (req) => gateConnection(req, env),
+      })) || new Response('Not Found', { status: 404 })
+    );
   },
 } satisfies ExportedHandler<Env>;
