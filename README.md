@@ -9,7 +9,7 @@
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> The original native Android (Java) app lives on under [`android-old/`](android-old/) — this repo is its port to a shared-engine web + mobile codebase.
+> This started life as a native Android (Java) app and was rewritten as a shared-engine web + mobile codebase. The original Java source lives on in this repo's git history.
 
 ## How to play
 
@@ -43,7 +43,6 @@ MetaTicTacToe/
 │  └─ party/    # @mtt/party    — Cloudflare Workers server (partyserver, reuses the engine)
 ├─ web/         # Vite + React + TypeScript
 ├─ mobile/      # Expo (React Native) + TypeScript, Android target
-├─ android-old/ # archived original Java/Android app (read-only history)
 ├─ CLAUDE.md    # contributor / agent guide (deep detail)
 └─ progress.txt # migration log
 ```
@@ -125,10 +124,8 @@ The look comes from **`@mtt/theme`**, a single set of design tokens (palette, sp
 
 ## The original Android app
 
-The first version of MetaTicTacToe was a native Android app written in Java. It's preserved verbatim under [`android-old/`](android-old/) (with git history intact) and is no longer developed — the rules in `@mtt/engine` are a faithful port of its logic.
+The first version of MetaTicTacToe was a native Android app written in Java. It's no longer developed — the rules in `@mtt/engine` are a faithful port of its logic — and its original source lives on in this repo's git history.
 
 ## License
 
 [**GPL-3.0-or-later**](LICENSE). MetaTicTacToe is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but **without any warranty** — see the [`LICENSE`](LICENSE) file for the full text.
-
-The archived [`android-old/`](android-old/) app is covered by the same license.
