@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { HelpButton } from '../components/HelpButton';
 
 interface JoinNameProps {

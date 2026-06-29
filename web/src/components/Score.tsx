@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { GameState } from '@mtt/engine';
 import { boardScore } from '@mtt/engine';
 

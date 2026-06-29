@@ -7,6 +7,7 @@
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 > The original native Android (Java) app lives on under [`android-old/`](android-old/) — this repo is its port to a shared-engine web + mobile codebase.
 
@@ -128,4 +129,6 @@ The first version of MetaTicTacToe was a native Android app written in Java. It'
 
 ## License
 
-This project does not yet declare a license. Until one is added, all rights are reserved by the author.
+[**GPL-3.0-or-later**](LICENSE). MetaTicTacToe is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but **without any warranty** — see the [`LICENSE`](LICENSE) file for the full text.
+
+The archived [`android-old/`](android-old/) app is covered by the same license.

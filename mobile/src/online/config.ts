@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Online-mode configuration helpers: the PartyKit host and room-code generation.
  */

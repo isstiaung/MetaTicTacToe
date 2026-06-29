@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { Fragment } from 'react';
 import type { GameState, Player } from '@mtt/engine';
 import { boardScore, isFinished, LINES, metaCells } from '@mtt/engine';

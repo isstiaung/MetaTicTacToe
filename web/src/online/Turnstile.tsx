@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * A thin React wrapper around Cloudflare Turnstile's explicit-render widget.
  *
