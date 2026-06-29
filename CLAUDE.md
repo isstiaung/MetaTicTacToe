@@ -10,8 +10,8 @@ a line wins the game — and your move's cell position dictates which board your
 in next.
 
 This repo is a **TypeScript monorepo**: one shared, framework-agnostic rules engine drives a
-**web** app and a **React Native (Expo)** app. The original native-Android (Java) app is archived
-under `android-old/`. Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
+**web** app and a **React Native (Expo)** app — a port of the original native-Android (Java) app, whose
+source lives on in git history. Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
 
 ## Structure
 
@@ -21,7 +21,6 @@ MetaTicTacToe/
 ├─ tsconfig.base.json    # shared TS compiler options
 ├─ CLAUDE.md             # this file
 ├─ progress.txt          # migration log (history; all steps complete)
-├─ android-old/          # ARCHIVED original Java/Android app — do not develop here
 ├─ packages/
 │  ├─ engine/            # @mtt/engine — pure TS rules + AI + vitest tests (NO UI imports)
 │  ├─ theme/             # @mtt/theme — shared modern-minimal design tokens
@@ -132,5 +131,5 @@ After any `npm install` in `mobile/`, the shared-package symlinks are recreated 
 
 - TypeScript everywhere. Keep `@mtt/engine` framework-agnostic (no React/DOM/RN imports) so it runs
   in web, React Native, tests, and a worker.
-- Treat `android-old/` as read-only history; new work goes in `packages/`, `web/`, `mobile/`.
+- New work goes in `packages/`, `web/`, `mobile/`.
 - Add or change a rule? Do it in `@mtt/engine` with a vitest test, then let the UIs use it.
