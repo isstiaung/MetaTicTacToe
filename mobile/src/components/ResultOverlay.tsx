@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,6 +10,7 @@ import {
   type TextStyle,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { palette, radius, shadow, space, typography } from '@mtt/theme';
 import {
   boardScore,
@@ -53,12 +54,26 @@ export function ResultOverlay({
   const accent = player === 'X' ? palette.x : player === 'O' ? palette.o : palette.draw;
   const score = boardScore(state);
 
+  const [copied, setCopied] = useState(false);
+
   const handleShare = useCallback(() => {
     Share.share({
       message: gameSummaryText(state, { players, url: SHARE_URL }),
     }).catch(() => {
       // Share dismissed / unavailable — ignore.
     });
+  }, [state, players]);
+
+  // Copy the Wordle-style emoji grid to the clipboard — handy when the share
+  // sheet mangles multi-line text, and parity with the web "Copy result" button.
+  const handleCopy = useCallback(async () => {
+    try {
+      await Clipboard.setStringAsync(gameSummaryText(state, { players, url: SHARE_URL }));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — ignore.
+    }
   }, [state, players]);
 
   return (
@@ -107,6 +122,11 @@ export function ResultOverlay({
           <View style={styles.actions}>
             <Button label="Play again" onPress={onPlayAgain} />
             <Button label="Share" variant="secondary" onPress={handleShare} />
+            <Button
+              label={copied ? 'Copied!' : 'Copy result'}
+              variant="ghost"
+              onPress={handleCopy}
+            />
             <Button label="Home" variant="ghost" onPress={onHome} />
           </View>
         </Pressable>
