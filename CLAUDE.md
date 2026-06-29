@@ -10,8 +10,8 @@ a line wins the game — and your move's cell position dictates which board your
 in next.
 
 This repo is a **TypeScript monorepo**: one shared, framework-agnostic rules engine drives a
-**web** app and a **React Native (Expo)** app — a port of the original native-Android (Java) app, whose
-source lives on in git history. Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
+**web** app and a **React Native (Expo)** app — a TypeScript port of an earlier native-Android (Java) app.
+Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
 
 ## Structure
 

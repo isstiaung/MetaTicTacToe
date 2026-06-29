@@ -9,7 +9,7 @@
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> This started life as a native Android (Java) app and was rewritten as a shared-engine web + mobile codebase. The original Java source lives on in this repo's git history.
+> This started life as a native Android (Java) app and was rewritten as a shared-engine web + mobile codebase.
 
 ## How to play
 
@@ -123,7 +123,7 @@ The look comes from **`@mtt/theme`**, a single set of design tokens (palette, sp
 
 ## The original Android app
 
-The first version of MetaTicTacToe was a native Android app written in Java. It's no longer developed — the rules in `@mtt/engine` are a faithful port of its logic — and its original source lives on in this repo's git history.
+The first version of MetaTicTacToe was a native Android app written in Java; it's no longer maintained, and the rules in `@mtt/engine` are a faithful port of its logic.
 
 ## License
 
