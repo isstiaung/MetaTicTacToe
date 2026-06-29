@@ -2,6 +2,7 @@
   "expo": {
     "name": "MetaTicTacToe",
     "slug": "metatictactoe",
+    "scheme": "mttt",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +25,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "partykitHost": "127.0.0.1:1999"
+      "partykitHost": "127.0.0.1:1999",
+      "turnstileSiteKey": "1x00000000000000000000AA",
+      "turnstilePageOrigin": "",
+      "webAppUrl": ""
     }
   }
 }
