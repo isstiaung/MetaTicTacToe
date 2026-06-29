@@ -3,6 +3,7 @@ import { boardScore, isLegalMove } from '@mtt/engine';
 import type { Outcome } from '@mtt/engine';
 import type { RoomPlayers, Seat } from '@mtt/protocol';
 import { MetaBoard } from '../components/MetaBoard';
+import { MatchStats } from '../components/MatchStats';
 import { ResultModal } from '../components/ResultModal';
 import { Score } from '../components/Score';
 import { roomShareUrl, useOnlineGame } from './useOnlineGame';
@@ -331,6 +332,8 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
       </div>
 
       <MetaBoard state={state} locked={locked} onPlay={handlePlay} />
+
+      <MatchStats state={state} names={shareNames} you={you} />
 
       <p className="fine-print">Inactive rooms are freed after 6 hours.</p>
 
