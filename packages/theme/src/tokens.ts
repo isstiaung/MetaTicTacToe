@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Modern-minimal design tokens, shared by the web and mobile apps.
  *

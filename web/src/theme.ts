@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Bridges the shared @mtt/theme tokens into CSS custom properties on :root,
  * so the stylesheet can reference them via var(--mtt-*) without re-declaring a

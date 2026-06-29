@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Authoritative game server for online MetaTicTacToe (Cloudflare Workers / partyserver). One Durable Object = one match.",
+  "license": "GPL-3.0-or-later",
+  "author": "Sainath Rajagopal <hello@isstiaung.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isstiaung/MetaTicTacToe.git",
+    "directory": "packages/party"
+  },
   "scripts": {
     "dev": "wrangler dev --port 1999",
     "deploy": "wrangler deploy",

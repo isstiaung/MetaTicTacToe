@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { useMemo } from 'react';
 import type { GameState } from '@mtt/engine';
 import { allowedBoards } from '@mtt/engine';

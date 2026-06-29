@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   authorizeConnection,
