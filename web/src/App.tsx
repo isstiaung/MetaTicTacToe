@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Difficulty, GameState } from '@mtt/engine';
 import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';

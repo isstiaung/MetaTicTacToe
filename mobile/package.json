@@ -2,6 +2,14 @@
   "name": "mobile",
   "version": "1.0.0",
   "main": "index.ts",
+  "description": "Mobile (Expo / React Native) client for MetaTicTacToe (Ultimate / Meta Tic-Tac-Toe).",
+  "license": "GPL-3.0-or-later",
+  "author": "Sainath Rajagopal <hello@isstiaung.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isstiaung/MetaTicTacToe.git",
+    "directory": "mobile"
+  },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~56.0.12",

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { memo } from 'react';
 import { StyleSheet, Text, type TextStyle } from 'react-native';
 import { palette, typography } from '@mtt/theme';

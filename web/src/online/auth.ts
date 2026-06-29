@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Client side of the online-play abuse gate (see `packages/party/src/auth.ts`).
  *
