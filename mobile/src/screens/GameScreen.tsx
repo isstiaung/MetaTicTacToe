@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   type TextStyle,
@@ -11,9 +12,13 @@ import {
 } from 'react-native';
 import { palette, radius, space, typography } from '@mtt/theme';
 import { boardScore, type Difficulty } from '@mtt/engine';
+import { HelpButton } from '../components/HelpButton';
+import { MatchStats } from '../components/MatchStats';
 import { MetaBoard } from '../components/MetaBoard';
 import { ResultOverlay } from '../components/ResultOverlay';
+import { RulesModal } from '../components/RulesModal';
 import { Score } from '../components/Score';
+import { loadRulesSeen, markRulesSeen } from '../prefs';
 import { useGame, type Mode } from '../useGame';
 
 interface GameScreenProps {
@@ -29,6 +34,21 @@ export function GameScreen({ mode, difficulty, onHome }: GameScreenProps) {
   // Whether the user has dismissed the end-of-game overlay (game stays over).
   const [resultDismissed, setResultDismissed] = useState(false);
 
+  // Auto-show the rules once, at a player's very first game on this install.
+  const [showRules, setShowRules] = useState(false);
+  useEffect(() => {
+    let active = true;
+    loadRulesSeen().then((seen) => {
+      if (active && !seen) {
+        setShowRules(true);
+        void markRulesSeen();
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Reset the dismissed flag whenever a fresh game begins.
   useEffect(() => {
     if (!state.winner) setResultDismissed(false);
@@ -40,7 +60,7 @@ export function GameScreen({ mode, difficulty, onHome }: GameScreenProps) {
   }, [newGame]);
 
   // The meta board fills the screen width, capped for large screens.
-  const boardWidth = Math.min(width - space.lg * 2, 440);
+  const boardWidth = Math.min(width - space.lg * 2, 420);
 
   const current = state.currentPlayer;
   const turnColor = current === 'X' ? palette.x : palette.o;
@@ -67,61 +87,78 @@ export function GameScreen({ mode, difficulty, onHome }: GameScreenProps) {
     <View style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={onHome} hitSlop={10} style={styles.backBtn}>
+        <Pressable
+          onPress={onHome}
+          hitSlop={10}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back to home"
+        >
           <Text style={styles.backText} allowFontScaling={false}>
             ‹ Home
           </Text>
         </Pressable>
-        <View style={styles.topBarRight}>
-          <Score state={state} />
-          <Text style={styles.modeLabel} allowFontScaling={false}>
-            {mode === 'vs-computer'
-              ? `vs Computer · ${difficulty === 'easy' ? 'Easy' : 'Hard'}`
-              : '2 Players'}
-          </Text>
+        <View style={styles.topBarRightGroup}>
+          <HelpButton />
+          <View style={styles.topBarRight}>
+            <Score state={state} />
+            <Text style={styles.modeLabel} allowFontScaling={false}>
+              {mode === 'vs-computer'
+                ? `vs Computer · ${difficulty === 'easy' ? 'Easy' : 'Hard'}`
+                : '2 Players'}
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Turn indicator + status */}
-      <View style={styles.statusBlock}>
-        {state.winner ? (
-          <View style={[styles.turnPill, { backgroundColor: palette.surfaceAlt }]}>
-            <Text
-              style={[styles.turnText, { color: palette.ink }]}
-              allowFontScaling={false}
-            >
-              {resultText}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
-            <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
-            <Text
-              style={[styles.turnText, { color: turnColor }]}
-              allowFontScaling={false}
-            >
-              {showThinking ? 'Computer thinking…' : `${current} to move`}
-            </Text>
-          </View>
-        )}
-        <Text style={styles.statusText} allowFontScaling={false}>
-          {statusLine}
-        </Text>
-      </View>
-
-      {/* Board */}
-      <View style={styles.boardWrap} pointerEvents={showThinking ? 'none' : 'auto'}>
-        <MetaBoard state={state} width={boardWidth} onPressCell={play} />
-      </View>
-
-      {/* New game */}
-      <View style={styles.footer}>
-        <Pressable onPress={handleNewGame} style={styles.newGameBtn} hitSlop={8}>
-          <Text style={styles.newGameText} allowFontScaling={false}>
-            New game
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Turn indicator + status */}
+        <View style={styles.statusBlock}>
+          {state.winner ? (
+            <View style={[styles.turnPill, { backgroundColor: palette.surfaceAlt }]}>
+              <Text style={[styles.turnText, { color: palette.ink }]} allowFontScaling={false}>
+                {resultText}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
+              <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
+              <Text style={[styles.turnText, { color: turnColor }]} allowFontScaling={false}>
+                {showThinking ? 'Computer thinking…' : `${current} to move`}
+              </Text>
+            </View>
+          )}
+          <Text style={styles.statusText} allowFontScaling={false}>
+            {statusLine}
           </Text>
-        </Pressable>
-      </View>
+        </View>
+
+        {/* Board */}
+        <View style={styles.boardWrap} pointerEvents={showThinking ? 'none' : 'auto'}>
+          <MetaBoard state={state} width={boardWidth} onPressCell={play} />
+        </View>
+
+        {/* Live match stats */}
+        <MatchStats state={state} />
+
+        {/* New game */}
+        <View style={styles.footer}>
+          <Pressable
+            onPress={handleNewGame}
+            style={styles.newGameBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Start a new game"
+          >
+            <Text style={styles.newGameText} allowFontScaling={false}>
+              New game
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
 
       <ResultOverlay
         winner={resultDismissed ? null : state.winner}
@@ -130,6 +167,7 @@ export function GameScreen({ mode, difficulty, onHome }: GameScreenProps) {
         onHome={onHome}
         onDismiss={() => setResultDismissed(true)}
       />
+      <RulesModal visible={showRules} onClose={() => setShowRules(false)} />
     </View>
   );
 }
@@ -154,6 +192,11 @@ const styles = StyleSheet.create({
     color: palette.inkSoft,
     fontWeight: typography.weight.medium as TextStyle['fontWeight'],
   },
+  topBarRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
   topBarRight: {
     alignItems: 'flex-end',
     gap: space.xs,
@@ -163,10 +206,15 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontWeight: typography.weight.medium as TextStyle['fontWeight'],
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: space.xl,
+    paddingVertical: space.lg,
+  },
   statusBlock: {
     alignItems: 'center',
     gap: space.sm,
-    marginBottom: space.xl,
   },
   turnPill: {
     flexDirection: 'row',
@@ -190,13 +238,11 @@ const styles = StyleSheet.create({
     color: palette.inkSoft,
   },
   boardWrap: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: space.xl,
   },
   newGameBtn: {
     paddingVertical: space.sm,

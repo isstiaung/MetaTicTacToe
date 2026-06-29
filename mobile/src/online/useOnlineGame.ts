@@ -23,6 +23,7 @@ import type {
   Seat,
   ServerMessage,
 } from '@mtt/protocol';
+import { currentSessionToken } from './auth';
 import { PARTYKIT_HOST } from './config';
 import { loadName, loadPlayerId } from './identity';
 
@@ -139,7 +140,13 @@ export function useOnlineGame(code: string): UseOnlineGame {
       if (cancelled) return;
       identityRef.current = { playerId, name };
 
-      socket = new PartySocket({ host: PARTYKIT_HOST, room: code });
+      // `query` runs on every (re)connect: attach the cached session token so the server's
+      // connect gate lets us through. The token is minted on the online menu before connecting.
+      socket = new PartySocket({
+        host: PARTYKIT_HOST,
+        room: code,
+        query: async () => ({ token: currentSessionToken() }),
+      });
       socketRef.current = socket;
       socket.addEventListener('open', handleOpen);
       socket.addEventListener('close', handleClose);

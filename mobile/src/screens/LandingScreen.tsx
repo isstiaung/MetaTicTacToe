@@ -11,6 +11,7 @@ import {
 import { palette, radius, space, typography } from '@mtt/theme';
 import type { Difficulty } from '@mtt/engine';
 import { Button } from '../components/Button';
+import { HelpButton } from '../components/HelpButton';
 import { TextField } from '../components/TextField';
 import type { Mode } from '../useGame';
 
@@ -64,6 +65,9 @@ export function LandingScreen({
                 <Pressable
                   key={d}
                   onPress={() => onChangeDifficulty(d)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${d === 'easy' ? 'Easy' : 'Hard'} difficulty`}
                   style={[
                     styles.toggleOption,
                     selected && styles.toggleOptionActive,
@@ -101,15 +105,19 @@ export function LandingScreen({
         </View>
       </View>
 
-      <Pressable
-        onPress={() => Linking.openURL(RULES_URL)}
-        style={styles.rulesLink}
-        hitSlop={12}
-      >
-        <Text style={styles.rulesText} allowFontScaling={false}>
-          Rules ↗
-        </Text>
-      </Pressable>
+      <View style={styles.footerRow}>
+        <HelpButton />
+        <Pressable
+          onPress={() => Linking.openURL(RULES_URL)}
+          hitSlop={12}
+          accessibilityRole="link"
+          accessibilityLabel="Open the full rules article"
+        >
+          <Text style={styles.rulesText} allowFontScaling={false}>
+            Full rules ↗
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -179,8 +187,11 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontWeight: typography.weight.semibold as TextStyle['fontWeight'],
   },
-  rulesLink: {
-    alignSelf: 'center',
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.lg,
   },
   rulesText: {
     fontSize: typography.size.sm,

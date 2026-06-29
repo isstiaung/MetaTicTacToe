@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -11,12 +12,16 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { palette, radius, shadow, space, typography } from '@mtt/theme';
 import { boardScore, type Player } from '@mtt/engine';
+import { HelpButton } from '../components/HelpButton';
+import { MatchStats } from '../components/MatchStats';
 import { MetaBoard } from '../components/MetaBoard';
 import { ResultOverlay } from '../components/ResultOverlay';
 import { Score } from '../components/Score';
 import { Button } from '../components/Button';
+import { roomShareUrl } from '../online/links';
 import { useOnlineGame } from '../online/useOnlineGame';
 
 /** ~14% tint of `palette.danger` (#E5484D) for the urgent move-timer background. */
@@ -45,7 +50,7 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
   } = useOnlineGame(code);
 
   const { width } = useWindowDimensions();
-  const boardWidth = Math.min(width - space.lg * 2, 440);
+  const boardWidth = Math.min(width - space.lg * 2, 420);
 
   // Whether the user has dismissed the end-of-game overlay (game stays over).
   // Resets automatically once a rematch starts (the winner clears).
@@ -54,6 +59,8 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
     if (!state.winner) setResultDismissed(false);
   }, [state.winner]);
 
+  const [codeCopied, setCodeCopied] = useState(false);
+
   const handleHome = useCallback(() => {
     leave();
     onHome();
@@ -61,10 +68,20 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
 
   const shareCode = useCallback(() => {
     Share.share({
-      message: `Join my MetaTicTacToe game! Room code: ${roomCode}`,
+      message: `Join my MetaTicTacToe game! Room code: ${roomCode}\n${roomShareUrl(roomCode)}`,
     }).catch(() => {
       // Share dismissed / unavailable — ignore.
     });
+  }, [roomCode]);
+
+  const copyCode = useCallback(async () => {
+    try {
+      await Clipboard.setStringAsync(roomCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — ignore.
+    }
   }, [roomCode]);
 
   // --- Lobby / waiting -------------------------------------------------------
@@ -80,7 +97,13 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
             Share this code so a friend can join.
           </Text>
 
-          <Pressable onPress={shareCode} style={styles.codeChip} hitSlop={8}>
+          <Pressable
+            onPress={shareCode}
+            style={styles.codeChip}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Room code ${roomCode}. Tap to share.`}
+          >
             <Text style={styles.codeChipText} allowFontScaling={false}>
               {roomCode}
             </Text>
@@ -88,6 +111,15 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
               Tap to share
             </Text>
           </Pressable>
+
+          <View style={styles.lobbyActions}>
+            <Button label="Share invite" variant="secondary" onPress={shareCode} />
+            <Button
+              label={codeCopied ? 'Copied!' : 'Copy code'}
+              variant="ghost"
+              onPress={copyCode}
+            />
+          </View>
 
           <Text style={styles.connNote} allowFontScaling={false}>
             {connected ? 'Connected to room' : 'Connecting…'}
@@ -178,46 +210,52 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
         />
       </View>
 
-      {/* Turn indicator + status */}
-      <View style={styles.statusBlock}>
-        {state.winner ? (
-          <View style={[styles.turnPill, { backgroundColor: palette.surfaceAlt }]}>
-            <Text style={[styles.turnText, { color: palette.ink }]} allowFontScaling={false}>
-              {turnText}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
-            <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
-            <Text style={[styles.turnText, { color: turnColor }]} allowFontScaling={false}>
-              {turnText}
-            </Text>
-          </View>
-        )}
-        {!state.winner && status === 'playing' && turnDeadline !== null ? (
-          <MoveTimer deadline={turnDeadline} seat={current} />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Turn indicator + status */}
+        <View style={styles.statusBlock}>
+          {state.winner ? (
+            <View style={[styles.turnPill, { backgroundColor: palette.surfaceAlt }]}>
+              <Text style={[styles.turnText, { color: palette.ink }]} allowFontScaling={false}>
+                {turnText}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.turnPill, { backgroundColor: turnSoft }]}>
+              <View style={[styles.turnDot, { backgroundColor: turnColor }]} />
+              <Text style={[styles.turnText, { color: turnColor }]} allowFontScaling={false}>
+                {turnText}
+              </Text>
+            </View>
+          )}
+          {!state.winner && status === 'playing' && turnDeadline !== null ? (
+            <MoveTimer deadline={turnDeadline} seat={current} />
+          ) : null}
+          <Text style={styles.statusText} allowFontScaling={false}>
+            {connNote ?? statusLine}
+          </Text>
+        </View>
+
+        {/* Board (locked unless it's your turn and you're connected) */}
+        <View style={styles.boardWrap} pointerEvents={boardLocked ? 'none' : 'auto'}>
+          <MetaBoard state={state} width={boardWidth} onPressCell={sendMove} />
+        </View>
+
+        {/* Live match stats */}
+        <MatchStats state={state} names={{ X: players.X?.name, O: players.O?.name }} you={you} />
+
+        {error ? (
+          <Text style={styles.errorNote} allowFontScaling={false}>
+            {error}
+          </Text>
         ) : null}
-        <Text style={styles.statusText} allowFontScaling={false}>
-          {connNote ?? statusLine}
-        </Text>
-      </View>
 
-      {/* Board (locked unless it's your turn and you're connected) */}
-      <View style={styles.boardWrap} pointerEvents={boardLocked ? 'none' : 'auto'}>
-        <MetaBoard state={state} width={boardWidth} onPressCell={sendMove} />
-      </View>
-
-      {error ? (
-        <Text style={styles.errorNote} allowFontScaling={false}>
-          {error}
-        </Text>
-      ) : null}
-
-      <View style={styles.footer}>
         <Text style={styles.finePrint} allowFontScaling={false}>
           Inactive rooms are freed after 6 hours.
         </Text>
-      </View>
+      </ScrollView>
 
       {/* Result + rematch. The "Play again" button asks for a rematch; once we've
           asked (but the opponent hasn't), a pending notice layers over the overlay. */}
@@ -283,14 +321,23 @@ function MoveTimer({ deadline, seat }: { deadline: number; seat: Player }) {
 function TopBar({ onHome }: { onHome: () => void }) {
   return (
     <View style={styles.topBar}>
-      <Pressable onPress={onHome} hitSlop={10} style={styles.backBtn}>
+      <Pressable
+        onPress={onHome}
+        hitSlop={10}
+        style={styles.backBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Back to home"
+      >
         <Text style={styles.backText} allowFontScaling={false}>
           ‹ Home
         </Text>
       </Pressable>
-      <Text style={styles.modeLabel} allowFontScaling={false}>
-        Online
-      </Text>
+      <View style={styles.topBarRightGroup}>
+        <Text style={styles.modeLabel} allowFontScaling={false}>
+          Online
+        </Text>
+        <HelpButton />
+      </View>
     </View>
   );
 }
@@ -356,6 +403,11 @@ const styles = StyleSheet.create({
     color: palette.inkSoft,
     fontWeight: typography.weight.medium as TextStyle['fontWeight'],
   },
+  topBarRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
   modeLabel: {
     fontSize: typography.size.sm,
     color: palette.muted,
@@ -400,6 +452,12 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     color: palette.muted,
     letterSpacing: 0.5,
+  },
+  lobbyActions: {
+    alignSelf: 'stretch',
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    marginTop: space.xs,
   },
   connNote: {
     fontSize: typography.size.sm,
@@ -455,11 +513,18 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold as TextStyle['fontWeight'],
   },
 
+  // Scrollable play area
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: space.lg,
+    paddingBottom: space.lg,
+  },
+
   // Turn + status
   statusBlock: {
     alignItems: 'center',
     gap: space.sm,
-    marginBottom: space.xl,
   },
   turnPill: {
     flexDirection: 'row',
@@ -502,7 +567,6 @@ const styles = StyleSheet.create({
   },
 
   boardWrap: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

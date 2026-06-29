@@ -38,6 +38,8 @@ function ButtonImpl({ label, onPress, variant = 'primary', style }: ButtonProps)
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
         styles.button,
         containerStyle,
