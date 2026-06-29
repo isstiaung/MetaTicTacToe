@@ -20,7 +20,6 @@ MetaTicTacToe/
 ├─ package.json          # npm workspaces root (workspaces: packages/*)
 ├─ tsconfig.base.json    # shared TS compiler options
 ├─ CLAUDE.md             # this file
-├─ progress.txt          # migration log (history; all steps complete)
 ├─ packages/
 │  ├─ engine/            # @mtt/engine — pure TS rules + AI + vitest tests (NO UI imports)
 │  ├─ theme/             # @mtt/theme — shared modern-minimal design tokens

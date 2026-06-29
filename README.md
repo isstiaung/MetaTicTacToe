@@ -43,8 +43,7 @@ MetaTicTacToe/
 │  └─ party/    # @mtt/party    — Cloudflare Workers server (partyserver, reuses the engine)
 ├─ web/         # Vite + React + TypeScript
 ├─ mobile/      # Expo (React Native) + TypeScript, Android target
-├─ CLAUDE.md    # contributor / agent guide (deep detail)
-└─ progress.txt # migration log
+└─ CLAUDE.md    # contributor / agent guide (deep detail)
 ```
 
 `web/` and `mobile/` are standalone apps that consume the shared packages by **path alias to their TypeScript source** — no build step for the shared code. See [`CLAUDE.md`](CLAUDE.md) for the wiring details.
