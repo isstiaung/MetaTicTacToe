@@ -29,7 +29,6 @@ packages/protocol   @mtt/protocol — online wire types (reuses engine types)
 packages/party      @mtt/party    — Cloudflare Workers game server + tests
 web/                Vite + React + TS web app
 mobile/             Expo React Native app (Android target)
-android-old/        ARCHIVED original Java/Android app — read-only history, do not develop here
 ```
 
 See [`CLAUDE.md`](CLAUDE.md) for a deeper architecture tour (engine API, indexing, online design).
