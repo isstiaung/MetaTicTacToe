@@ -36,7 +36,7 @@ See [`CLAUDE.md`](CLAUDE.md) for a deeper architecture tour (engine API, indexin
 
 ## Development setup
 
-Requires **Node.js 18+**.
+Requires **Node.js 20+** (the Cloudflare Worker tooling, `wrangler`, needs 20+; the rest runs on 20 or 22).
 
 ```bash
 # 1. Shared packages (engine, theme, protocol, party) + tests/typecheck
