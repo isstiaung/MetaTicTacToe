@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Cloudflare Workers adapter (via partyserver). One Durable Object instance == one match room.
  *

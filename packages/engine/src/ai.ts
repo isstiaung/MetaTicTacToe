@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { applyMove, getLegalMoves, LINES, metaCells, other } from './engine';
 import type { Difficulty, GameState, Move, Player } from './types';
 

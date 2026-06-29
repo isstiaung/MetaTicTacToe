@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Core types for Ultimate / Meta Tic-Tac-Toe.
  *

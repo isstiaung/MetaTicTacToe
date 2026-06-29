@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { Cell, GameState, Move, Outcome, Player, SubBoard } from './types';
 
 /** The eight winning lines of a 3x3 grid (rows, columns, diagonals). */

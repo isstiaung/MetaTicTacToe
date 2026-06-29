@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { Difficulty } from '@mtt/engine';
 import { HelpButton } from './HelpButton';
 import { cn } from '../theme';

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * Global styles. Color/spacing/motion values are injected as CSS custom
  * properties from the shared @mtt/theme tokens (see theme.ts) so this file
