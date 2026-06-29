@@ -52,7 +52,7 @@ MetaTicTacToe/
 
 ## Getting started
 
-**Prerequisites:** Node.js 18+ and npm. For the mobile app, the [Expo](https://docs.expo.dev/) tooling (`npx expo`), plus an Android emulator or the Expo Go app to run on a device.
+**Prerequisites:** Node.js 20+ and npm. For the mobile app, the [Expo](https://docs.expo.dev/) tooling (`npx expo`), plus an Android emulator or the Expo Go app to run on a device.
 
 ```bash
 git clone git@github.com:isstiaung/MetaTicToe.git
