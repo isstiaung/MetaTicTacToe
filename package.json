@@ -16,9 +16,10 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test -w @mtt/engine && npm run test -w @mtt/party",
+    "test": "npm run test -w @mtt/engine && npm run test -w @mtt/protocol && npm run test -w @mtt/party",
     "test:engine": "npm run test -w @mtt/engine",
     "test:party": "npm run test -w @mtt/party",
-    "typecheck": "npm run typecheck -w @mtt/engine && npm run typecheck -w @mtt/theme && npm run typecheck -w @mtt/protocol && npm run typecheck -w @mtt/party"
+    "typecheck": "npm run typecheck -w @mtt/engine && npm run typecheck -w @mtt/theme && npm run typecheck -w @mtt/protocol && npm run typecheck -w @mtt/party",
+    "test:protocol": "npm run test -w @mtt/protocol"
   }
 }

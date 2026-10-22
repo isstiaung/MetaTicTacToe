@@ -135,8 +135,9 @@ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 \
 ```
 
 Notes:
-- **Fail-open by design:** no `AUTH_SECRET` → gate disabled; no `TURNSTILE_SECRET` → `/auth` issues
-  tokens without a challenge. Set **both** for real protection.
+- **Off until configured:** no `AUTH_SECRET` → gate disabled (dev). `AUTH_SECRET` without
+  `TURNSTILE_SECRET` → `/auth` **fails closed** (503 `turnstile_not_configured`) instead of issuing
+  unchallenged tokens. Set **both** for real protection.
 - **Test keys** (Cloudflare-documented): the web defaults to the always-pass site key
   `1x00000000000000000000AA`; its matching secret is `1x0000000000000000000000000000000AA`.
 - Tune the limits in [`packages/party/wrangler.jsonc`](packages/party/wrangler.jsonc) (`ratelimits`)
@@ -150,9 +151,10 @@ Not deployed yet. When ready: set `mobile/app.json` → `expo.extra.partykitHost
 shareable APK, or `--profile production` + Play Store). EAS must see the monorepo root so `packages/*`
 resolve (metro `watchFolders` + the `postinstall` symlink) — follow Expo's monorepo guide.
 
-> **Heads-up:** the mobile client doesn't mint a Turnstile token yet, so it can't connect to the
-> *gated* production server — point it at the dev server until a Turnstile webview is wired into the
-> RN app, or treat the gate as web-only.
+> **Heads-up:** the mobile client solves Turnstile in a WebView (`TurnstileModal`). A *real* site
+> key only renders on its allow-listed hostnames, so also set `expo.extra.turnstileSiteKey` and
+> `expo.extra.turnstilePageOrigin` (the web app's origin, e.g. `https://mttt.isstiaung.me`) in
+> `mobile/app.json` before pointing it at the gated production server.
 
 ## Local dev
 

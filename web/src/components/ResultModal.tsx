@@ -30,6 +30,10 @@ interface ResultModalProps {
    * player can't double-request a rematch.
    */
   pendingNote?: string;
+  /** An informational line under the actions (online), e.g. "Bob wants a rematch!". */
+  note?: string;
+  /** Overrides the line under the title, e.g. to explain a win by forfeit. */
+  subtitle?: string;
 }
 
 /**
@@ -66,6 +70,8 @@ export function ResultModal({
   players,
   playAgainLabel = 'Play again',
   pendingNote,
+  note,
+  subtitle,
 }: ResultModalProps) {
   const playAgainRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
@@ -89,9 +95,10 @@ export function ResultModal({
   const title =
     outcome === 'draw' ? "It's a draw" : outcome === 'X' ? 'X wins!' : 'O wins!';
   const sub =
-    outcome === 'draw'
+    subtitle ??
+    (outcome === 'draw'
       ? 'Every board is settled with no line claimed.'
-      : 'Three claimed squares in a line.';
+      : 'Three claimed squares in a line.');
   const glyph = outcome === 'draw' ? 'Draw' : outcome;
 
   // Copy the result to the clipboard (Wordle-style) rather than going through
@@ -170,6 +177,7 @@ export function ResultModal({
           {pendingNote !== undefined && (
             <p className="modal__pending thinking-dots">{pendingNote}</p>
           )}
+          {note !== undefined && <p className="modal__pending">{note}</p>}
         </div>
       </div>
     </div>

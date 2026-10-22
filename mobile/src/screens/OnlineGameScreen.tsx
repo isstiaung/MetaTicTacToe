@@ -43,9 +43,12 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
     connected,
     code: roomCode,
     turnDeadline,
+    claimableAt,
+    forfeit,
     error,
     sendMove,
     sendRematch,
+    sendClaim,
     leave,
   } = useOnlineGame(code);
 
@@ -181,10 +184,23 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
       ? 'Your move'
       : `${current === you ? 'You' : nameOf(current)} to move`;
 
-  // Rematch: show "Waiting…" once we've asked but the other side hasn't.
+  // Rematch: show "Waiting…" once we've asked but the other side hasn't; otherwise say
+  // whether the opponent has asked, or has left.
   const youAsked = you ? rematch[you] : false;
   const oppAsked = opponentSeat ? rematch[opponentSeat] : false;
   const rematchPending = youAsked && !oppAsked;
+  const opponentName = opponentSeat ? nameOf(opponentSeat) : 'Your opponent';
+  const opponentOnline = opponent?.connected ?? false;
+  const rematchLabel = oppAsked && !youAsked ? 'Accept rematch' : 'Rematch';
+  let rematchNote: string | undefined;
+  if (state.winner && !youAsked) {
+    if (!opponentOnline) rematchNote = `${opponentName} has left the room.`;
+    else if (oppAsked) rematchNote = `${opponentName} wants a rematch!`;
+  }
+  const forfeitNote = forfeit ? `${nameOf(forfeit)} left the game.` : undefined;
+
+  // Opponent offline mid-game: after a grace period we may end it as a win by forfeit.
+  const canClaim = status === 'playing' && connected && opponent !== undefined && !opponentOnline;
 
   return (
     <View style={styles.container}>
@@ -236,6 +252,32 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
           <Text style={styles.statusText} allowFontScaling={false}>
             {connNote ?? statusLine}
           </Text>
+          {canClaim && claimableAt !== null ? (
+            <ClaimWin claimableAt={claimableAt} onClaim={sendClaim} />
+          ) : null}
+          {state.winner && forfeitNote ? (
+            <Text style={styles.statusText} allowFontScaling={false}>
+              {forfeitNote}
+            </Text>
+          ) : null}
+          {/* With the result overlay closed, keep the rematch reachable here. */}
+          {state.winner && resultDismissed && !youAsked ? (
+            <>
+              <View style={styles.statusActions}>
+                <Button label={rematchLabel} variant="secondary" onPress={sendRematch} />
+                <Button
+                  label="Show result"
+                  variant="ghost"
+                  onPress={() => setResultDismissed(false)}
+                />
+              </View>
+              {rematchNote ? (
+                <Text style={styles.statusText} allowFontScaling={false}>
+                  {rematchNote}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
         </View>
 
         {/* Board (locked unless it's your turn and you're connected) */}
@@ -266,6 +308,9 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
         onPlayAgain={sendRematch}
         onHome={handleHome}
         onDismiss={() => setResultDismissed(true)}
+        playAgainLabel={rematchLabel}
+        note={rematchNote}
+        subtitle={forfeitNote}
       />
       <Modal
         visible={Boolean(state.winner) && rematchPending}
@@ -276,7 +321,9 @@ export function OnlineGameScreen({ code, onHome }: OnlineGameScreenProps) {
         <View style={styles.rematchBackdrop} pointerEvents="box-none">
           <View style={styles.rematchCard}>
             <Text style={styles.rematchText} allowFontScaling={false}>
-              Waiting for opponent to accept rematch…
+              {opponentOnline
+                ? 'Waiting for opponent to accept rematch…'
+                : `Waiting for ${opponentName} to come back…`}
             </Text>
             <Button label="Cancel" variant="ghost" onPress={handleHome} />
           </View>
@@ -314,6 +361,32 @@ function MoveTimer({ deadline, seat }: { deadline: number; seat: Player }) {
       <Text style={[styles.moveTimerUnit, { color }]} allowFontScaling={false}>
         left
       </Text>
+    </View>
+  );
+}
+
+/**
+ * Shown to the player left behind while their opponent is offline mid-game: counts down the
+ * grace period, then offers to end the game as a win by forfeit. The server re-checks the time.
+ */
+function ClaimWin({ claimableAt, onClaim }: { claimableAt: number; onClaim: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const seconds = Math.ceil((claimableAt - now) / 1000);
+  if (seconds > 0) {
+    return (
+      <Text style={styles.statusText} allowFontScaling={false}>
+        If they don’t return, you can claim the win in {seconds}s.
+      </Text>
+    );
+  }
+  return (
+    <View style={styles.statusActions}>
+      <Button label="Claim win" onPress={onClaim} />
     </View>
   );
 }
@@ -560,6 +633,13 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold as TextStyle['fontWeight'],
     opacity: 0.7,
+  },
+  statusActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: space.sm,
+    marginTop: space.xs,
   },
   statusText: {
     fontSize: typography.size.sm,

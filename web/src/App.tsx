@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Difficulty, GameState } from '@mtt/engine';
-import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';
+import { applyMove, createGame, isLegalMove } from '@mtt/engine';
+import { generateRoomCode, isValidRoomCode, normalizeRoomCode } from '@mtt/protocol';
+import { requestAiMove } from './ai/aiClient';
 import { Landing } from './components/Landing';
 import { GameScreen } from './components/GameScreen';
 import { ResultModal } from './components/ResultModal';
@@ -11,11 +13,9 @@ import { OnlineMenu } from './online/OnlineMenu';
 import { OnlineGame } from './online/OnlineGame';
 import { JoinName } from './online/JoinName';
 import {
-  generateRoomCode,
   getRoomFromUrl,
   getStoredName,
   hasStoredName,
-  normalizeRoomCode,
   setRoomInUrl,
   storeName,
 } from './online/useOnlineGame';
@@ -128,7 +128,7 @@ export function App() {
 
   const joinOnline = useCallback((code: string) => {
     const normalized = normalizeRoomCode(code);
-    if (!normalized) return;
+    if (!isValidRoomCode(normalized)) return;
     setOnlineCode(normalized);
     setRoomInUrl(normalized);
     setScreen('online-game');
@@ -155,9 +155,9 @@ export function App() {
     [thinking],
   );
 
-  // After every state change, if it is the computer's turn, compute its move
-  // asynchronously so the heavy minimax never blocks paint. A "thinking" flag
-  // locks the board meanwhile.
+  // After every state change, if it is the computer's turn, compute its move in a
+  // Web Worker so the minimax never blocks the page. A "thinking" flag locks the
+  // board meanwhile.
   useEffect(() => {
     if (screen !== 'game') return;
     if (mode !== 'vs-computer') return;
@@ -165,28 +165,28 @@ export function App() {
     if (state.currentPlayer === HUMAN) return;
 
     const gen = genRef.current;
+    let cancelled = false;
     setThinking(true);
 
-    // Defer to a macrotask so the human's mark paints first, then run the AI.
-    const timer = setTimeout(() => {
-      // A reset / home / new mode happened while we were queued — abandon.
-      if (gen !== genRef.current) return;
-
-      const move = chooseAiMove(state, difficulty);
-      if (gen !== genRef.current) return;
+    // A short floor so the human's mark paints and settles before the reply lands.
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 220));
+    void Promise.all([requestAiMove(state, difficulty), minDelay]).then(([move]) => {
+      // A reset / home / new mode happened while we were thinking — abandon.
+      if (cancelled || gen !== genRef.current) return;
 
       setThinking(false);
-      if (move && isLegalMove(state, move.board, move.cell)) {
-        setState((prev) => {
-          // Re-validate against the latest state before committing.
-          if (gen !== genRef.current) return prev;
-          if (!isLegalMove(prev, move.board, move.cell)) return prev;
-          return applyMove(prev, move.board, move.cell);
-        });
-      }
-    }, 220);
+      if (!move) return;
+      setState((prev) => {
+        // Re-validate against the latest state before committing.
+        if (gen !== genRef.current) return prev;
+        if (!isLegalMove(prev, move.board, move.cell)) return prev;
+        return applyMove(prev, move.board, move.cell);
+      });
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+    };
   }, [screen, mode, state, difficulty]);
 
   const modeLabel =

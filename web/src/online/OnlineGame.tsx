@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { boardScore, isLegalMove } from '@mtt/engine';
 import type { Outcome } from '@mtt/engine';
 import type { RoomPlayers, Seat } from '@mtt/protocol';
@@ -9,8 +9,7 @@ import { MatchStats } from '../components/MatchStats';
 import { ResultModal } from '../components/ResultModal';
 import { Score } from '../components/Score';
 import { roomShareUrl, useOnlineGame } from './useOnlineGame';
-import { exchangeTurnstileToken, hasSessionToken, TURNSTILE_SITE_KEY } from './auth';
-import { Turnstile } from './Turnstile';
+import { AuthChallenge, useSessionToken } from './AuthChallenge';
 import { HelpButton } from '../components/HelpButton';
 import { cn } from '../theme';
 
@@ -90,35 +89,66 @@ function MoveTimer({ deadline, seat }: { deadline: number; seat: Seat }) {
   );
 }
 
+/**
+ * Shown to the player left behind while their opponent is offline mid-game: counts down the
+ * grace period, then offers to end the game as a win by forfeit. The server re-checks the time.
+ */
+function ClaimWin({ claimableAt, onClaim }: { claimableAt: number; onClaim: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const seconds = Math.ceil((claimableAt - now) / 1000);
+  if (seconds > 0) {
+    return (
+      <span className="status__hint">
+        If they don’t return, you can claim the win in {seconds}s.
+      </span>
+    );
+  }
+  return (
+    <div className="status__actions">
+      <button type="button" className="btn btn--primary" onClick={onClaim}>
+        Claim win
+      </button>
+    </div>
+  );
+}
+
 export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps) {
   // Abuse gate: a session token must be minted (via Turnstile) before the socket
   // can connect. When arriving from a shared `?room=` link we skip the online
   // menu where this normally happens, so mint it here too — otherwise the socket
   // hits the gate with an empty token and is stuck "Connecting…" forever. If a
   // token is already cached (e.g. created via the menu), connect immediately.
-  const [authReady, setAuthReady] = useState(hasSessionToken);
-  const [authError, setAuthError] = useState(false);
-  const [turnstileKey, setTurnstileKey] = useState(0);
-
-  const handleVerify = useCallback(async (turnstileToken: string) => {
-    try {
-      await exchangeTurnstileToken(turnstileToken);
-      setAuthError(false);
-      setAuthReady(true);
-    } catch {
-      setAuthError(true);
-    }
-  }, []);
-
-  const retryAuth = useCallback(() => {
-    setAuthError(false);
-    setTurnstileKey((k) => k + 1);
-  }, []);
+  const [authReady, markAuthReady] = useSessionToken();
+  // Connect once a token is in hand, then stay connected. When the token expires mid-game,
+  // `authReady` flips back and a fresh one is minted in the background for future reconnects,
+  // without dropping the live socket.
+  const [authedOnce, setAuthedOnce] = useState(authReady);
+  useEffect(() => {
+    if (authReady) setAuthedOnce(true);
+  }, [authReady]);
 
   // Hold off connecting (empty `code`) until we hold a valid session token.
-  const game = useOnlineGame(authReady ? code : '', name);
-  const { state, status, you, players, rematch, connected, turnDeadline, error, sendMove, sendRematch } =
-    game;
+  const game = useOnlineGame(authedOnce ? code : '', name);
+  const {
+    state,
+    status,
+    you,
+    players,
+    rematch,
+    connected,
+    turnDeadline,
+    claimableAt,
+    forfeit,
+    error,
+    sendMove,
+    sendRematch,
+    sendClaim,
+  } = game;
   const [copied, setCopied] = useState(false);
   // Whether the player dismissed the result dialog; reset when a new game
   // (rematch) begins, i.e. once the board no longer has a winner.
@@ -166,7 +196,7 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
 
         <div className="lobby">
           <h2 className="lobby__title">
-            {!authReady
+            {!authedOnce
               ? 'Verifying…'
               : !connected
                 ? 'Connecting…'
@@ -183,27 +213,7 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
           </div>
 
           {/* Invisible/managed Turnstile — only shows UI if interaction is needed. */}
-          {!authReady && !authError && (
-            <div className="online-auth">
-              <Turnstile
-                key={turnstileKey}
-                siteKey={TURNSTILE_SITE_KEY}
-                onVerify={handleVerify}
-                onError={() => setAuthError(true)}
-              />
-              <span className="status__hint">Verifying you’re human…</span>
-            </div>
-          )}
-          {authError && (
-            <div className="online-auth">
-              <span className="status__hint" style={{ color: 'var(--mtt-danger)' }}>
-                Verification failed.
-              </span>
-              <button type="button" className="btn btn--ghost" onClick={retryAuth}>
-                Retry
-              </button>
-            </div>
-          )}
+          {!authReady && <AuthChallenge onReady={markAuthReady} />}
 
           {you !== null && (
             <p className="lobby__seat">
@@ -235,6 +245,7 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
 
   const opponentSeat: Seat = you === 'X' ? 'O' : 'X';
   const opponentConnected = players[opponentSeat]?.connected ?? false;
+  const opponentName = seatName(players, opponentSeat);
 
   let statusNote: string | null = null;
   if (!connected) {
@@ -251,12 +262,28 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
   } else if (myTurn) {
     hint = state.activeBoard === null ? 'Your move — any open board.' : 'Your move — play in the highlighted board.';
   } else {
-    hint = `Waiting for ${seatName(players, opponentSeat)}…`;
+    hint = `Waiting for ${opponentName}…`;
   }
 
-  // Rematch modal state: show a pending note when only we have requested it.
-  const iRequestedRematch = rematch[you];
-  const pendingNote = iRequestedRematch ? 'Waiting for opponent to accept' : undefined;
+  // Rematch: a pending note once we've asked; otherwise say if the opponent has asked or left.
+  const iAskedRematch = rematch[you];
+  const opponentAskedRematch = rematch[opponentSeat];
+  const rematchLabel = opponentAskedRematch && !iAskedRematch ? 'Accept rematch' : 'Rematch';
+  const pendingNote = iAskedRematch
+    ? opponentConnected
+      ? 'Waiting for opponent to accept'
+      : `Waiting for ${opponentName} to come back`
+    : undefined;
+  let rematchNote: string | undefined;
+  if (gameOver && !iAskedRematch) {
+    if (!opponentConnected) rematchNote = `${opponentName} has left the room.`;
+    else if (opponentAskedRematch) rematchNote = `${opponentName} wants a rematch!`;
+  }
+  const forfeitNote = forfeit ? `${seatName(players, forfeit)} left the game.` : undefined;
+
+  // Opponent offline mid-game: after a grace period we may end it as a win by forfeit.
+  const canClaim =
+    status === 'playing' && connected && !opponentConnected && claimableAt !== null;
 
   // End-of-game header readout and the names used for the share summary.
   const metaScore = boardScore(state);
@@ -326,6 +353,35 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
             {statusNote}
           </span>
         )}
+        {canClaim && <ClaimWin claimableAt={claimableAt} onClaim={sendClaim} />}
+        {gameOver && forfeitNote && <span className="status__hint">{forfeitNote}</span>}
+        {/* With the result dialog closed, keep the rematch reachable here. */}
+        {gameOver && resultDismissed && (
+          <>
+            <div className="status__actions">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={sendRematch}
+                disabled={iAskedRematch}
+              >
+                {iAskedRematch ? 'Rematch requested' : rematchLabel}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setResultDismissed(false)}
+              >
+                Show result
+              </button>
+            </div>
+            {(pendingNote ?? rematchNote) && (
+              <span className="status__hint">{pendingNote ?? rematchNote}</span>
+            )}
+          </>
+        )}
+        {/* Mid-game the token may expire; mint a fresh one quietly for future reconnects. */}
+        {!authReady && <AuthChallenge onReady={markAuthReady} />}
         {error && (
           <span className="status__hint" style={{ color: 'var(--mtt-danger)' }}>
             {error}
@@ -347,8 +403,10 @@ export function OnlineGame({ code, name, onLeave, onGameStart }: OnlineGameProps
           onPlayAgain={sendRematch}
           onHome={onLeave}
           onDismiss={() => setResultDismissed(true)}
-          playAgainLabel="Rematch"
+          playAgainLabel={rematchLabel}
           pendingNote={pendingNote}
+          note={rematchNote}
+          subtitle={forfeitNote}
         />
       )}
     </main>

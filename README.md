@@ -26,7 +26,7 @@ You play on a 3×3 grid of nine small tic-tac-toe boards.
 ## Features
 
 - 🎮 **Local 2-player** (pass-and-play) on web and mobile
-- 🤖 **Vs-computer** with Easy and Hard difficulty (depth-limited minimax + alpha-beta)
+- 🤖 **Vs-computer** with Easy and Hard difficulty (iterative-deepening minimax + alpha-beta)
 - 🌐 **Online PvP** — play a friend over the internet via a shareable room code (authoritative server, reconnect, rematch)
 - 🧠 **One shared rules engine** — web, mobile, and the server can never disagree on the rules
 - 🎨 **Modern-minimal design** from a shared token system; the active board glows, finished boards fade
@@ -56,7 +56,7 @@ MetaTicTacToe/
 git clone git@github.com:isstiaung/MetaTicToe.git
 cd MetaTicToe
 npm install        # installs the shared packages (engine + theme)
-npm test           # run the engine test suite (21 tests)
+npm test           # run the engine, protocol and server test suites
 ```
 
 ### Run the web app

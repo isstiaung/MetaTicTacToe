@@ -36,6 +36,12 @@ interface ResultOverlayProps {
   onHome: () => void;
   /** Dismiss the overlay without ending the game (reveals the finished board). */
   onDismiss: () => void;
+  /** Label for the primary action (online: "Rematch" / "Accept rematch"). */
+  playAgainLabel?: string;
+  /** An informational line above the actions (online), e.g. "Bob wants a rematch!". */
+  note?: string;
+  /** Overrides the line under the score, e.g. to explain a win by forfeit. */
+  subtitle?: string;
 }
 
 export function ResultOverlay({
@@ -45,6 +51,9 @@ export function ResultOverlay({
   onPlayAgain,
   onHome,
   onDismiss,
+  playAgainLabel = 'Play again',
+  note,
+  subtitle,
 }: ResultOverlayProps) {
   const visible = winner !== null;
   const isDraw = winner === 'draw';
@@ -116,11 +125,17 @@ export function ResultOverlay({
           </View>
 
           <Text style={styles.subtitle} allowFontScaling={false}>
-            {isDraw ? 'Every board is full — nobody claimed a line.' : 'Three boards in a row.'}
+            {subtitle ??
+              (isDraw ? 'Every board is full — nobody claimed a line.' : 'Three boards in a row.')}
           </Text>
+          {note ? (
+            <Text style={styles.subtitle} allowFontScaling={false}>
+              {note}
+            </Text>
+          ) : null}
 
           <View style={styles.actions}>
-            <Button label="Play again" onPress={onPlayAgain} />
+            <Button label={playAgainLabel} onPress={onPlayAgain} />
             <Button label="Share" variant="secondary" onPress={handleShare} />
             <Button
               label={copied ? 'Copied!' : 'Copy result'}

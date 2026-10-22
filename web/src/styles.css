@@ -153,6 +153,12 @@ a {
   transform: translateY(1px);
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn--primary {
   background: var(--mtt-accent);
   color: var(--mtt-accent-text);
@@ -314,6 +320,16 @@ a {
   font-size: var(--mtt-size-sm);
   color: var(--mtt-ink-soft);
   min-height: 1.2em;
+}
+
+/* A row of buttons under the status line (online: rematch / claim win). */
+.status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--mtt-space-sm);
+  margin-top: var(--mtt-space-xs);
 }
 
 /* Subtle footnote (e.g. the online room-expiry notice). */

@@ -7,7 +7,7 @@
  * entire authority (seat assignment, turn + legality enforcement, rematch, disconnect) is
  * unit-testable. It reuses `@mtt/engine` as the single source of truth for the rules.
  */
-import { applyMove, chooseAiMove, createGame, isLegalMove } from '@mtt/engine';
+import { applyMove, chooseAiMove, createGame, forfeit, isLegalMove, other } from '@mtt/engine';
 import type {
   ClientMessage,
   RematchState,
@@ -23,6 +23,8 @@ interface SeatState {
   playerId: string;
   name: string;
   connected: boolean;
+  /** Epoch-ms when this seat last went offline, or `null` while connected. */
+  disconnectedAt: number | null;
 }
 
 /**
@@ -36,6 +38,13 @@ export const TURN_DURATION_MS = 120_000;
  * frees it: the Durable Object deletes its own storage so the code is reusable.
  */
 export const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * How long a player must have been offline, mid-game, before their opponent may claim the win.
+ * Long enough to ride out a reconnect (backgrounded phone, network switch); short enough that the
+ * player left behind isn't stuck waiting on auto-moves.
+ */
+export const CLAIM_WIN_AFTER_MS = 60_000;
 
 /** Difficulty of the move the server auto-plays when a turn times out. */
 const TIMEOUT_DIFFICULTY = 'easy';
@@ -60,6 +69,8 @@ export interface RoomState {
    * is still present to watch it).
    */
   lastActivityAt: number;
+  /** The seat that lost by forfeit (its opponent claimed the win), or `null`. */
+  forfeit: Seat | null;
 }
 
 /** Result of handling one message: the new room, replies to the sender, and whether to broadcast. */
@@ -67,6 +78,11 @@ export interface ReduceResult {
   room: RoomState;
   reply: ServerMessage[];
   broadcast: boolean;
+  /**
+   * Seats changed hands (a rematch swaps X and O), so every connection must be told its new
+   * seat — the server re-sends `assigned` to each one, not just to the sender.
+   */
+  reseated?: boolean;
 }
 
 export function createRoom(code: string, now: number = Date.now()): RoomState {
@@ -78,10 +94,12 @@ export function createRoom(code: string, now: number = Date.now()): RoomState {
     rematch: { X: false, O: false },
     turnDeadline: null,
     lastActivityAt: now,
+    forfeit: null,
   };
 }
 
-function seatOfPlayer(room: RoomState, playerId: string): Seat | undefined {
+/** The seat held by `playerId`, if any. */
+export function seatOfPlayer(room: RoomState, playerId: string): Seat | undefined {
   if (room.seats.X?.playerId === playerId) return 'X';
   if (room.seats.O?.playerId === playerId) return 'O';
   return undefined;
@@ -104,6 +122,20 @@ function players(room: RoomState): RoomPlayers {
   return out;
 }
 
+/**
+ * When the connected player may claim the win because their opponent has been offline for
+ * {@link CLAIM_WIN_AFTER_MS}, or `null` if no claim is pending: the game must be in progress
+ * with exactly one of the two players connected.
+ */
+export function claimableAt(room: RoomState): number | null {
+  const { X, O } = room.seats;
+  if (room.status !== 'playing' || !X || !O || X.connected === O.connected) return null;
+  const gone = X.connected ? O : X;
+  // `?? null`: rooms persisted before this field existed have no timestamp — no claim then.
+  const since = gone.disconnectedAt ?? null;
+  return since === null ? null : since + CLAIM_WIN_AFTER_MS;
+}
+
 /** The broadcast message describing the room's shared state. */
 export function syncMessage(room: RoomState): ServerMessage {
   return {
@@ -113,6 +145,8 @@ export function syncMessage(room: RoomState): ServerMessage {
     players: players(room),
     rematch: room.rematch,
     turnDeadline: room.turnDeadline,
+    claimableAt: claimableAt(room),
+    forfeit: room.forfeit,
   };
 }
 
@@ -147,7 +181,8 @@ function nextDeadline(room: RoomState, now: number, fresh: boolean): number | nu
  * Apply a client message to the room.
  *
  * @param connPlayerId the player id already bound to the sending connection (undefined until
- *   that connection has sent a `join`). For a `join` message the id comes from the message itself.
+ *   that connection has sent a `join`). A `join` claims the seat of the id in the message, which
+ *   must match this one if the connection is already bound — one connection, one seat.
  * @param now epoch-ms used to stamp the move clock (injected so the reducer stays pure/testable).
  */
 export function reduce(
@@ -159,18 +194,28 @@ export function reduce(
   switch (msg.type) {
     case 'join': {
       const pid = msg.playerId;
+      if (connPlayerId !== undefined && connPlayerId !== pid) {
+        return error(room, 'bad_message', 'This connection has already joined as another player.');
+      }
       const wasPlaying = room.status === 'playing';
       let seat = seatOfPlayer(room, pid);
       if (seat) {
         // Reclaim an existing seat (reconnect): refresh name + mark connected.
         const prev = room.seats[seat]!;
-        room = setSeat(room, seat, { ...prev, name: msg.name || prev.name, connected: true });
-      } else if (!room.seats.X) {
-        seat = 'X';
-        room = setSeat(room, seat, { playerId: pid, name: msg.name || defaultName(seat), connected: true });
-      } else if (!room.seats.O) {
-        seat = 'O';
-        room = setSeat(room, seat, { playerId: pid, name: msg.name || defaultName(seat), connected: true });
+        room = setSeat(room, seat, {
+          ...prev,
+          name: msg.name || prev.name,
+          connected: true,
+          disconnectedAt: null,
+        });
+      } else if (!room.seats.X || !room.seats.O) {
+        seat = room.seats.X ? 'O' : 'X';
+        room = setSeat(room, seat, {
+          playerId: pid,
+          name: msg.name || defaultName(seat),
+          connected: true,
+          disconnectedAt: null,
+        });
       } else {
         return error(room, 'room_full', 'This game already has two players.');
       }
@@ -198,22 +243,50 @@ export function reduce(
     case 'rematch': {
       const seat = connPlayerId ? seatOfPlayer(room, connPlayerId) : undefined;
       if (!seat) return error(room, 'not_joined', 'Join the game first.');
-      let rematch: RematchState = { ...room.rematch, [seat]: true };
+      if (room.status !== 'ended') {
+        return error(room, 'illegal_move', 'A rematch can only start once the game is over.');
+      }
+      const rematch: RematchState = { ...room.rematch, [seat]: true };
       room = { ...room, rematch };
+      let reseated = false;
       if (rematch.X && rematch.O) {
-        rematch = { X: false, O: false };
-        room = { ...room, game: createGame(), rematch };
+        // X always opens, so swap seats: the other player moves first in the new game.
+        room = {
+          ...room,
+          seats: { X: room.seats.O, O: room.seats.X },
+          game: createGame(),
+          rematch: { X: false, O: false },
+          forfeit: null,
+        };
         room = { ...room, status: recomputeStatus(room) };
         room = { ...room, turnDeadline: nextDeadline(room, now, true) };
+        reseated = true;
       }
       room = { ...room, lastActivityAt: now };
+      return { room, reply: [], broadcast: true, reseated };
+    }
+
+    case 'claim': {
+      const seat = connPlayerId ? seatOfPlayer(room, connPlayerId) : undefined;
+      if (!seat) return error(room, 'not_joined', 'Join the game first.');
+      const at = claimableAt(room);
+      if (at === null || !room.seats[seat]!.connected) {
+        return error(room, 'cannot_claim', 'Your opponent is still in the game.');
+      }
+      if (now < at) {
+        return error(room, 'cannot_claim', 'Your opponent may still come back — wait a little longer.');
+      }
+      const loser = other(seat);
+      room = { ...room, game: forfeit(room.game, loser), forfeit: loser };
+      room = { ...room, status: recomputeStatus(room) };
+      room = { ...room, turnDeadline: nextDeadline(room, now, true), lastActivityAt: now };
       return { room, reply: [], broadcast: true };
     }
 
     case 'leave': {
       const seat = connPlayerId ? seatOfPlayer(room, connPlayerId) : undefined;
       if (seat) {
-        room = setSeat(room, seat, { ...room.seats[seat]!, connected: false });
+        room = markOffline(room, seat, now);
         room = { ...room, lastActivityAt: now };
       }
       return { room, reply: [], broadcast: Boolean(seat) };
@@ -243,10 +316,24 @@ export function applyTimeout(
   return { room, reply: [], broadcast: true };
 }
 
-/** Mark a player's seat disconnected (called when their connection closes). */
-export function disconnect(room: RoomState, playerId: string): ReduceResult {
+/** Mark `seat` offline, keeping the original time if it was already offline. */
+function markOffline(room: RoomState, seat: Seat, now: number): RoomState {
+  const prev = room.seats[seat]!;
+  const disconnectedAt = prev.connected ? now : (prev.disconnectedAt ?? now);
+  return setSeat(room, seat, { ...prev, connected: false, disconnectedAt });
+}
+
+/**
+ * Mark a player's seat disconnected (called when their last connection closes — the server
+ * skips this while another connection still holds the same player id).
+ */
+export function disconnect(
+  room: RoomState,
+  playerId: string,
+  now: number = Date.now(),
+): ReduceResult {
   const seat = seatOfPlayer(room, playerId);
   if (!seat) return { room, reply: [], broadcast: false };
-  room = setSeat(room, seat, { ...room.seats[seat]!, connected: false });
+  room = markOffline(room, seat, now);
   return { room, reply: [], broadcast: true };
 }

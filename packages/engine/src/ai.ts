@@ -5,8 +5,25 @@ import type { Difficulty, GameState, Move, Player } from './types';
 
 const WIN_SCORE = 1_000_000;
 
+/** Deepest iteration the hard AI attempts (it usually stops earlier on the search limits). */
+const MAX_DEPTH = 10;
+
 /** Positional weights (center is most valuable, then corners, then edges). */
 const POS_WEIGHT = [3, 2, 3, 2, 4, 2, 3, 2, 3];
+
+/** Bounds on the `hard` search. Whichever runs out first ends it. */
+export interface AiLimits {
+  /** Maximum positions visited per move (deterministic). Default 100,000. */
+  maxNodes?: number;
+  /**
+   * Wall-clock cap per move in ms, so slow devices stay responsive. Default 250.
+   * Pass `Infinity` for fully deterministic play (e.g. in tests).
+   */
+  maxTimeMs?: number;
+}
+
+const DEFAULT_MAX_NODES = 100_000;
+const DEFAULT_MAX_TIME_MS = 250;
 
 /** Count lines where `me` has two marks and the third is empty (an open threat). */
 function lineThreats(cells: (Player | null)[], me: Player): number {
@@ -21,10 +38,13 @@ function lineThreats(cells: (Player | null)[], me: Player): number {
   return n;
 }
 
-/** Heuristic evaluation of a state from `me`'s perspective. */
-function evaluate(state: GameState, me: Player): number {
-  if (state.winner === me) return WIN_SCORE;
-  if (state.winner && state.winner !== 'draw') return -WIN_SCORE;
+/**
+ * Heuristic evaluation of a state from `me`'s perspective. Wins and losses are
+ * offset by `ply` so the search prefers the quickest win and the slowest loss.
+ */
+function evaluate(state: GameState, me: Player, ply: number): number {
+  if (state.winner === me) return WIN_SCORE - ply;
+  if (state.winner && state.winner !== 'draw') return -WIN_SCORE + ply;
   if (state.winner === 'draw') return 0;
 
   const opp = other(me);
@@ -57,21 +77,32 @@ function orderMoves(moves: Move[]): Move[] {
 
 interface SearchCtx {
   nodes: number;
-  budget: number;
+  maxNodes: number;
+  /** Epoch-ms after which the search gives up. */
+  deadline: number;
   me: Player;
+  /** Set once a limit is hit; every value computed after that is meaningless. */
+  aborted: boolean;
 }
 
-/** Minimax with alpha-beta pruning, bounded by depth and a node budget. */
+/** Minimax with alpha-beta pruning. Sets `ctx.aborted` (and returns junk) once a limit is hit. */
 function search(
   state: GameState,
   depth: number,
+  ply: number,
   alpha: number,
   beta: number,
   ctx: SearchCtx,
 ): number {
+  if (ctx.aborted) return 0;
   ctx.nodes += 1;
-  if (state.winner || depth === 0 || ctx.nodes > ctx.budget) {
-    return evaluate(state, ctx.me);
+  // Check the clock only every 1024 nodes — Date.now() is not free.
+  if (ctx.nodes > ctx.maxNodes || ((ctx.nodes & 1023) === 0 && Date.now() > ctx.deadline)) {
+    ctx.aborted = true;
+    return 0;
+  }
+  if (state.winner || depth === 0) {
+    return evaluate(state, ctx.me, ply);
   }
 
   const moves = orderMoves(getLegalMoves(state));
@@ -80,7 +111,10 @@ function search(
   if (maximizing) {
     let best = -Infinity;
     for (const m of moves) {
-      best = Math.max(best, search(applyMove(state, m.board, m.cell), depth - 1, alpha, beta, ctx));
+      best = Math.max(
+        best,
+        search(applyMove(state, m.board, m.cell), depth - 1, ply + 1, alpha, beta, ctx),
+      );
       alpha = Math.max(alpha, best);
       if (alpha >= beta) break;
     }
@@ -89,7 +123,10 @@ function search(
 
   let best = Infinity;
   for (const m of moves) {
-    best = Math.min(best, search(applyMove(state, m.board, m.cell), depth - 1, alpha, beta, ctx));
+    best = Math.min(
+      best,
+      search(applyMove(state, m.board, m.cell), depth - 1, ply + 1, alpha, beta, ctx),
+    );
     beta = Math.min(beta, best);
     if (alpha >= beta) break;
   }
@@ -100,7 +137,10 @@ function search(
  * Choose a move for the current player.
  *
  * - `easy`  — mostly random among legal moves (but always grabs an immediate win). Beatable.
- * - `hard`  — depth-limited minimax with alpha-beta and a node budget, so moves stay snappy.
+ * - `hard`  — iterative-deepening minimax with alpha-beta: every candidate move is searched to
+ *   depth 1, then all to depth 2, and so on until a {@link AiLimits limit} runs out. The move
+ *   from the deepest *completed* depth is played, so candidates are always compared at equal
+ *   depth and the search stays fast on any device.
  *
  * Returns `null` only when there are no legal moves (the game is over). `rng` is injectable
  * for deterministic testing.
@@ -109,6 +149,7 @@ export function chooseAiMove(
   state: GameState,
   difficulty: Difficulty = 'hard',
   rng: () => number = Math.random,
+  limits: AiLimits = {},
 ): Move | null {
   const moves = getLegalMoves(state);
   if (moves.length === 0) return null;
@@ -124,24 +165,40 @@ export function chooseAiMove(
     return moves[Math.floor(rng() * moves.length)];
   }
 
-  // hard: search from each root move and keep the best.
-  const ctx: SearchCtx = { nodes: 0, budget: 60_000, me };
-  const ordered = orderMoves(moves);
-  // Search shallower when the branching factor is wide (free-move / early game).
-  const depth = ordered.length > 24 ? 4 : 6;
+  const ctx: SearchCtx = {
+    nodes: 0,
+    maxNodes: limits.maxNodes ?? DEFAULT_MAX_NODES,
+    deadline: Date.now() + (limits.maxTimeMs ?? DEFAULT_MAX_TIME_MS),
+    me,
+    aborted: false,
+  };
 
+  let ordered = orderMoves(moves);
   let best = ordered[0];
-  let bestVal = -Infinity;
-  let alpha = -Infinity;
-  const beta = Infinity;
 
-  for (const m of ordered) {
-    const val = search(applyMove(state, m.board, m.cell), depth - 1, alpha, beta, ctx);
-    if (val > bestVal) {
-      bestVal = val;
-      best = m;
+  for (let depth = 1; depth <= MAX_DEPTH; depth += 1) {
+    let iterBest = ordered[0];
+    let iterVal = -Infinity;
+    let alpha = -Infinity;
+
+    for (const m of ordered) {
+      const val = search(applyMove(state, m.board, m.cell), depth - 1, 1, alpha, Infinity, ctx);
+      if (ctx.aborted) break;
+      if (val > iterVal) {
+        iterVal = val;
+        iterBest = m;
+      }
+      alpha = Math.max(alpha, iterVal);
     }
-    alpha = Math.max(alpha, bestVal);
+
+    // An interrupted iteration compared moves at unequal depths — discard it.
+    if (ctx.aborted) break;
+    best = iterBest;
+    // A forced win is already found; deeper search can't improve on it.
+    if (iterVal >= WIN_SCORE - MAX_DEPTH) break;
+    // Search the current best first next time: tighter alpha-beta bounds, faster iterations.
+    ordered = [iterBest, ...ordered.filter((m) => m !== iterBest)];
   }
+
   return best;
 }

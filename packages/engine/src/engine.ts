@@ -125,3 +125,12 @@ export function applyMove(state: GameState, board: number, cell: number): GameSt
     lastMove: { board, cell },
   };
 }
+
+/**
+ * End an in-progress game by forfeit: `loser` concedes and the other player wins, with the
+ * boards left as they were. Throws if the game is already over.
+ */
+export function forfeit(state: GameState, loser: Player): GameState {
+  if (state.winner) throw new Error('The game is already over.');
+  return { ...state, winner: other(loser), activeBoard: null };
+}
