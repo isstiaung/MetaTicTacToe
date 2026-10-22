@@ -126,9 +126,10 @@ The gate is **off until you configure it** (so local dev and CI stay zero-setup)
 3. **Web build already has the site key** via the `VITE_TURNSTILE_SITE_KEY` build variable (above)
    and `web/.env.production.local` for local builds.
 
-**Verify** the live gate (should print `401`):
+**Verify** the live gate (should print `401`; `--http1.1` matters — over HTTP/2 the WebSocket
+`Upgrade` is dropped, the request never reaches the gate, and you get a misleading `404`):
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 \
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 --http1.1 \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' \
   https://party.mttt.isstiaung.me/parties/main/TEST
