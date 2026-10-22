@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyTimeout,
+  CLAIM_WIN_AFTER_MS,
   createRoom,
   reduce,
   disconnect,
@@ -31,6 +32,17 @@ function seatedAt(now: number): RoomState {
   return room;
 }
 
+/** A seated room whose game has been played out to the end (status 'ended'). */
+function finished(now = 0): RoomState {
+  let room = seatedAt(now);
+  // Deterministic auto-moves (rng = 0) until the game ends.
+  for (let i = 0; i < 81 && room.status === 'playing'; i += 1) {
+    room = applyTimeout(room, now, () => 0).room;
+  }
+  expect(room.status).toBe('ended');
+  return room;
+}
+
 describe('joining', () => {
   it('assigns X then O and starts the game', () => {
     let room = createRoom('ABCD');
@@ -48,6 +60,18 @@ describe('joining', () => {
     const r = reduce(seated(), undefined, join('p3', 'Eve'));
     expect(r.reply[0]).toMatchObject({ type: 'error', code: 'room_full' });
     expect(r.broadcast).toBe(false);
+  });
+
+  it('does not let one connection take a second seat under another playerId', () => {
+    let room = createRoom('ABCD');
+    room = reduce(room, undefined, join('p1', 'Alice')).room;
+    // The same connection (bound to p1) tries to join again as p1b.
+    const r = reduce(room, 'p1', join('p1b', 'Alice again'));
+    expect(r.reply[0]).toMatchObject({ type: 'error', code: 'bad_message' });
+    expect(r.room.seats.O).toBeUndefined();
+    // The real opponent still gets the second seat.
+    const friend = reduce(r.room, undefined, join('p2', 'Bob'));
+    expect(friend.reply).toContainEqual({ type: 'assigned', you: 'O', code: 'ABCD' });
   });
 
   it('reclaims the same seat on reconnect by playerId (not a new seat)', () => {
@@ -94,17 +118,34 @@ describe('moves', () => {
 
 describe('rematch', () => {
   it('resets the game only once both players agree', () => {
-    const mid = reduce(seated(), 'p1', { type: 'move', board: 4, cell: 0 }).room;
-    expect(mid.game.lastMove).not.toBeNull();
+    const ended = finished();
 
-    const one = reduce(mid, 'p1', { type: 'rematch' });
+    const one = reduce(ended, 'p1', { type: 'rematch' });
     expect(one.room.rematch).toEqual({ X: true, O: false });
-    expect(one.room.game.lastMove).not.toBeNull(); // not reset yet
+    expect(one.room.game.winner).not.toBeNull(); // not reset yet
+    expect(one.reseated).toBeFalsy();
 
     const both = reduce(one.room, 'p2', { type: 'rematch' });
     expect(both.room.rematch).toEqual({ X: false, O: false });
     expect(both.room.game.lastMove).toBeNull(); // fresh game
-    expect(both.room.game.currentPlayer).toBe('X');
+    expect(both.room.status).toBe('playing');
+  });
+
+  it('swaps seats so the other player opens the next game', () => {
+    const one = reduce(finished(), 'p1', { type: 'rematch' }).room;
+    const both = reduce(one, 'p2', { type: 'rematch' });
+    expect(both.reseated).toBe(true);
+    expect(both.room.seats.X).toMatchObject({ playerId: 'p2', name: 'Bob' });
+    expect(both.room.seats.O).toMatchObject({ playerId: 'p1', name: 'Alice' });
+    expect(both.room.game.currentPlayer).toBe('X'); // Bob, now X, moves first
+  });
+
+  it('rejects a rematch request while the game is still being played', () => {
+    const mid = reduce(seated(), 'p1', { type: 'move', board: 4, cell: 0 }).room;
+    const r = reduce(mid, 'p1', { type: 'rematch' });
+    expect(r.reply[0]).toMatchObject({ type: 'error', code: 'illegal_move' });
+    expect(r.room.rematch).toEqual({ X: false, O: false });
+    expect(r.broadcast).toBe(false);
   });
 });
 
@@ -147,7 +188,7 @@ describe('move clock', () => {
   });
 
   it('keeps the new game untimed until its first move on rematch', () => {
-    const start = started(1_000);
+    const start = finished(1_000);
     const one = reduce(start, 'p1', { type: 'rematch' }, 2_000).room;
     expect(one.rematch).toEqual({ X: true, O: false });
     const both = reduce(one, 'p2', { type: 'rematch' }, 9_000).room;
@@ -223,5 +264,66 @@ describe('disconnect', () => {
   it('is a no-op for an unknown player', () => {
     const r = disconnect(seated(), 'ghost');
     expect(r.broadcast).toBe(false);
+  });
+
+  it('records when the seat went offline and clears it on rejoin', () => {
+    const gone = disconnect(seated(), 'p2', 5_000).room;
+    expect(gone.seats.O?.disconnectedAt).toBe(5_000);
+    // A second close (e.g. a stale socket) keeps the original time.
+    expect(disconnect(gone, 'p2', 9_000).room.seats.O?.disconnectedAt).toBe(5_000);
+    const back = reduce(gone, undefined, join('p2', 'Bob'), 6_000).room;
+    expect(back.seats.O).toMatchObject({ connected: true, disconnectedAt: null });
+  });
+});
+
+describe('claiming the win (opponent offline)', () => {
+  /** Mid-game, with Bob (O) offline since t = 10_000. */
+  function bobGone(): RoomState {
+    const mid = reduce(seatedAt(0), 'p1', { type: 'move', board: 4, cell: 0 }, 1_000).room;
+    return disconnect(mid, 'p2', 10_000).room;
+  }
+  const claim = { type: 'claim' } as const;
+
+  it('advertises when the claim opens', () => {
+    const sync = syncMessage(bobGone());
+    if (sync.type !== 'sync') throw new Error('expected sync');
+    expect(sync.claimableAt).toBe(10_000 + CLAIM_WIN_AFTER_MS);
+    expect(sync.forfeit).toBeNull();
+  });
+
+  it('has nothing to claim while both are present, or both are gone', () => {
+    const both = syncMessage(seated());
+    const neither = syncMessage(disconnect(bobGone(), 'p1', 11_000).room);
+    expect(both.type === 'sync' && both.claimableAt).toBeNull();
+    expect(neither.type === 'sync' && neither.claimableAt).toBeNull();
+  });
+
+  it('rejects a claim before the grace period is over', () => {
+    const r = reduce(bobGone(), 'p1', claim, 10_000 + CLAIM_WIN_AFTER_MS - 1);
+    expect(r.reply[0]).toMatchObject({ type: 'error', code: 'cannot_claim' });
+    expect(r.room.status).toBe('playing');
+  });
+
+  it('rejects a claim against an opponent who is connected', () => {
+    const r = reduce(seated(), 'p1', claim, 10_000_000);
+    expect(r.reply[0]).toMatchObject({ code: 'cannot_claim' });
+  });
+
+  it('ends the game as a forfeit once the grace period is over', () => {
+    const r = reduce(bobGone(), 'p1', claim, 10_000 + CLAIM_WIN_AFTER_MS);
+    expect(r.broadcast).toBe(true);
+    expect(r.room.status).toBe('ended');
+    expect(r.room.game.winner).toBe('X');
+    expect(r.room.forfeit).toBe('O');
+    expect(r.room.turnDeadline).toBeNull();
+  });
+
+  it('clears the forfeit when a rematch starts', () => {
+    let room = reduce(bobGone(), 'p1', claim, 10_000 + CLAIM_WIN_AFTER_MS).room;
+    room = reduce(room, undefined, join('p2', 'Bob'), 80_000).room; // Bob returns
+    room = reduce(room, 'p1', { type: 'rematch' }, 81_000).room;
+    room = reduce(room, 'p2', { type: 'rematch' }, 82_000).room;
+    expect(room.forfeit).toBeNull();
+    expect(room.status).toBe('playing');
   });
 });

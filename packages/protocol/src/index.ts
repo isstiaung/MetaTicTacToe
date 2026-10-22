@@ -40,7 +40,10 @@ export interface RematchState {
 export type ClientMessage =
   | { type: 'join'; playerId: string; name: string }
   | { type: 'move'; board: number; cell: number }
+  /** Ask for (or accept) a rematch. Only valid once the game has ended. */
   | { type: 'rematch' }
+  /** Claim the win because the opponent has been offline for too long (see `claimableAt`). */
+  | { type: 'claim' }
   | { type: 'leave' };
 
 export type ServerErrorCode =
@@ -48,11 +51,15 @@ export type ServerErrorCode =
   | 'not_your_turn'
   | 'illegal_move'
   | 'not_joined'
+  | 'cannot_claim'
   | 'bad_message';
 
 /** Messages the server sends to clients. */
 export type ServerMessage =
-  /** Sent to a single connection once it has joined (and on reconnect). */
+  /**
+   * Sent to a single connection once it has joined (and on reconnect). Also re-sent to
+   * every player when a rematch starts, because seats swap so the other player opens.
+   */
   | { type: 'assigned'; you: Seat; code: string }
   /** Broadcast to everyone whenever the room changes. */
   | {
@@ -67,8 +74,24 @@ export type ServerMessage =
        * a move for the current player. Clients render `deadline - Date.now()`.
        */
       turnDeadline: number | null;
+      /**
+       * Absolute epoch-ms from which the connected player may `claim` the win because
+       * their opponent has been offline that long, or `null` when no claim is pending
+       * (both present, both gone, or the game is not in progress).
+       */
+      claimableAt: number | null;
+      /** The seat that lost by forfeit (its opponent claimed the win), or `null`. */
+      forfeit: Seat | null;
     }
   | { type: 'error'; code: ServerErrorCode; message: string };
 
 // Re-export the engine types that travel across the wire, for convenience.
 export type { GameState, Move, Player };
+
+export {
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+  generateRoomCode,
+  normalizeRoomCode,
+  isValidRoomCode,
+} from './roomCode';

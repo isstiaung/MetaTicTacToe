@@ -53,9 +53,20 @@ function decodeExpMs(token: string): number {
   }
 }
 
+/** Tokens are treated as expired this long before their real expiry. */
+const EXPIRY_MARGIN_MS = 30_000;
+
 /** True while a non-expired session token is cached (30s safety margin). */
 export function hasSessionToken(): boolean {
-  return cachedToken !== null && Date.now() < cachedExpMs - 30_000;
+  return cachedToken !== null && Date.now() < sessionTokenExpiresAt();
+}
+
+/**
+ * Epoch-ms at which the cached token stops counting as valid (0 if none) — when a fresh one
+ * must be minted so later reconnects aren't rejected.
+ */
+export function sessionTokenExpiresAt(): number {
+  return cachedToken === null ? 0 : cachedExpMs - EXPIRY_MARGIN_MS;
 }
 
 /**

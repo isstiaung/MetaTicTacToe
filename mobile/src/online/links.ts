@@ -11,7 +11,7 @@
  */
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
-import { normalizeCode } from './config';
+import { isValidRoomCode, normalizeRoomCode } from '@mtt/protocol';
 
 /** Optional public web-app origin (e.g. `https://mttt.example.com`) for shareable https links. */
 const WEB_APP_URL: string =
@@ -30,17 +30,23 @@ export function roomShareUrl(code: string): string {
   }
 }
 
-/** Extract a normalized room code from an incoming deep link, or '' if none is present. */
+/** A valid room code from `raw`, or '' if it isn't one. */
+function validCode(raw: string): string {
+  const code = normalizeRoomCode(raw);
+  return isValidRoomCode(code) ? code : '';
+}
+
+/** Extract a valid room code from an incoming deep link, or '' if none is present. */
 export function parseRoomFromUrl(url: string | null | undefined): string {
   if (!url) return '';
   try {
     const parsed = Linking.parse(url);
     const fromQuery = parsed.queryParams?.room ?? parsed.queryParams?.code;
-    if (fromQuery) return normalizeCode(String(fromQuery));
+    if (fromQuery) return validCode(String(fromQuery));
     // Path-style fallback: mttt://join/CODE  ->  path "join/CODE".
     const path = parsed.path ?? '';
     const match = /(?:^|\/)join\/([^/?#]+)/.exec(path);
-    return match ? normalizeCode(match[1]) : '';
+    return match ? validCode(match[1]) : '';
   } catch {
     return '';
   }

@@ -40,7 +40,7 @@ Requires **Node.js 20+** (the Cloudflare Worker tooling, `wrangler`, needs 20+; 
 ```bash
 # 1. Shared packages (engine, theme, protocol, party) + tests/typecheck
 npm install
-npm test            # engine + party vitest suites
+npm test            # engine + protocol + party vitest suites
 npm run typecheck   # typecheck all shared packages
 
 # 2. Web app (standalone — its own node_modules)

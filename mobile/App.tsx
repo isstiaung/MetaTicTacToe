@@ -11,7 +11,11 @@ import { OnlineMenuScreen } from './src/screens/OnlineMenuScreen';
 import { OnlineGameScreen } from './src/screens/OnlineGameScreen';
 import { TurnstileModal } from './src/components/TurnstileModal';
 import type { Mode } from './src/useGame';
-import { exchangeTurnstileToken, hasSessionToken } from './src/online/auth';
+import {
+  exchangeTurnstileToken,
+  hasSessionToken,
+  sessionTokenExpiresAt,
+} from './src/online/auth';
 import { loadName, saveName } from './src/online/identity';
 import { parseRoomFromUrl } from './src/online/links';
 
@@ -30,6 +34,8 @@ export default function App() {
   // Turnstile gate: the room we want to enter once a session token is minted.
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [showTurnstile, setShowTurnstile] = useState(false);
+  // Bumped on every freshly minted token, to schedule its refresh.
+  const [tokenVersion, setTokenVersion] = useState(0);
 
   // Latest name for the (mount-bound) deep-link listener to read without re-subscribing.
   const nameRef = useRef(name);
@@ -80,7 +86,19 @@ export default function App() {
     };
   }, [goConnect]);
 
+  // While in a room, re-mint the token as it expires so the socket's later reconnects (say,
+  // after the app sat in the background overnight) aren't rejected by the connect gate.
+  const inRoom = screen.name === 'online-game';
+  useEffect(() => {
+    if (!inRoom) return;
+    const expiresAt = sessionTokenExpiresAt();
+    if (expiresAt === 0) return; // No token (the gate failed open) — nothing to refresh.
+    const id = setTimeout(() => setShowTurnstile(true), Math.max(0, expiresAt - Date.now()));
+    return () => clearTimeout(id);
+  }, [inRoom, tokenVersion]);
+
   // --- Turnstile outcomes ----------------------------------------------------
+  // Hides the challenge, then enters the room it was raised for (none for a refresh).
   const finishGate = useCallback(() => {
     setShowTurnstile(false);
     const code = pendingCode;
@@ -92,6 +110,7 @@ export default function App() {
     async (token: string) => {
       try {
         await exchangeTurnstileToken(token);
+        setTokenVersion((v) => v + 1);
       } catch {
         // Minting failed — proceed anyway: the connect gate is fail-open until secrets are set,
         // and if it isn't, the room screen surfaces the rejection.
