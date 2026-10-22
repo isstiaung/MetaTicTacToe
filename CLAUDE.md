@@ -10,8 +10,8 @@ a line wins the game — and your move's cell position dictates which board your
 in next.
 
 This repo is a **TypeScript monorepo**: one shared, framework-agnostic rules engine drives a
-**web** app and a **React Native (Expo)** app. The original native-Android (Java) app is archived
-under `android-old/`. Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
+**web** app and a **React Native (Expo)** app — a TypeScript port of an earlier native-Android (Java) app.
+Both apps support local 2-player, a vs-computer AI, and online (internet) PvP.
 
 ## Structure
 
@@ -20,12 +20,10 @@ MetaTicTacToe/
 ├─ package.json          # npm workspaces root (workspaces: packages/*)
 ├─ tsconfig.base.json    # shared TS compiler options
 ├─ CLAUDE.md             # this file
-├─ progress.txt          # migration log (history; all steps complete)
-├─ android-old/          # ARCHIVED original Java/Android app — do not develop here
 ├─ packages/
 │  ├─ engine/            # @mtt/engine — pure TS rules + AI + vitest tests (NO UI imports)
 │  ├─ theme/             # @mtt/theme — shared modern-minimal design tokens
-│  ├─ protocol/          # @mtt/protocol — online wire types (types-only; reuses engine types)
+│  ├─ protocol/          # @mtt/protocol — online wire types (reuses engine types) + room-code helpers + tests
 │  └─ party/             # @mtt/party — Cloudflare Workers server (partyserver, reuses @mtt/engine) + tests
 ├─ web/                  # Vite + React + TS  (standalone; aliases the shared packages)
 └─ mobile/               # Expo React Native + TS, Android target (standalone; symlinks them)
@@ -44,7 +42,9 @@ Public API (`packages/engine/src/index.ts`):
 - `createGame()` · `applyMove(state, board, cell)` (immutable, **throws on illegal move**) ·
   `getLegalMoves(state)` · `isLegalMove(state, board, cell)` · `allowedBoards(state)` ·
   `metaCells(state)` · `lineWinner(cells)` · `isFinished(subBoard)` · `other(player)` ·
-  `chooseAiMove(state, difficulty?, rng?)` (`null` only when the game is over) · `LINES`.
+  `forfeit(state, loser)` (ends a game early; throws if already over) ·
+  `chooseAiMove(state, difficulty?, rng?, limits?)` (`null` only when the game is over; `limits` =
+  `{maxNodes?, maxTimeMs?}`) · `LINES`.
 - **Indexing:** sub-boards and cells are `0..8` row-major (`0` = top-left … `8` = bottom-right).
 
 ### Game rules (enforced by the engine)
@@ -53,8 +53,11 @@ Public API (`packages/engine/src/index.ts`):
   `i` is already finished, the opponent may play any unfinished board (`activeBoard === null`).
 - A sub-board is won by 3-in-a-row; its winner claims that meta cell. Three claimed meta cells in
   a line wins the game; all boards finished with no line is a draw.
-- AI: `easy` = mostly random (always grabs an immediate win) — beatable; `hard` = depth-limited
-  minimax with alpha-beta + a node budget, so moves stay fast.
+- AI: `easy` = mostly random (always grabs an immediate win) — beatable; `hard` = iterative-
+  deepening minimax with alpha-beta, bounded by a node budget and a ~250ms time cap. Every
+  candidate is searched to the same depth before going deeper, and the deepest *completed* depth
+  decides, so moves stay fast on slow phones without comparing moves at unequal depths. The web
+  app runs the AI in a Web Worker (`web/src/ai`); mobile runs it on the JS thread (time-capped).
 
 These rules are a faithful TS port of the original Android `Board.java` / `EntireBoard.java`.
 
@@ -83,12 +86,17 @@ server-side, so clients can't cheat or desync. Transport is WebSockets on **Clou
 Durable Objects** (via `partyserver`; one Durable Object = one match room, keyed by a short code).
 
 - **`@mtt/protocol`** is the shared wire contract (`ClientMessage` / `ServerMessage`, reusing the
-  engine's `GameState`). The server and both clients import it.
+  engine's `GameState`) plus the room-code helpers (`generateRoomCode` / `normalizeRoomCode` /
+  `isValidRoomCode` — 4 chars, no ambiguous O/I/0/1). The server and both clients import it.
 - **`@mtt/party`** (`packages/party`) is the server: `src/room.ts` is a **pure, unit-tested
-  reducer** (seat assignment + reclaim-by-`playerId`, turn + legality via the engine, rematch,
-  disconnect); `src/server.ts` is a thin Cloudflare Workers adapter (`partyserver`) with
-  Durable-Object-storage-backed rooms. First joiner = X, second = O, a third is rejected
-  (`room_full`). The server is the **only writer** of
+  reducer** (seat assignment + reclaim-by-`playerId`, one seat per connection, turn + legality via
+  the engine, rematch once the game has ended — **seats swap** so the other player opens — claim
+  the win after the opponent has been offline `CLAIM_WIN_AFTER_MS` (60s), disconnect);
+  `src/messages.ts` validates every inbound frame (shape, types, name length) before the reducer
+  sees it; `src/server.ts` is a thin Cloudflare Workers adapter (`partyserver`) with
+  Durable-Object-storage-backed rooms, which also tracks which sockets belong to which player (a
+  late close of a stale socket doesn't mark a reconnected player offline). First joiner = X,
+  second = O, a third is rejected (`room_full`). The server is the **only writer** of
   `GameState`; clients render the broadcast `sync` and never call `applyMove` online.
 - **Clients**: each app has a `useOnlineGame` hook (`web/src/online`, `mobile/src/online`) over
   `partysocket` (auto-reconnect — covers backgrounded phones). Players set a display name and get a
@@ -104,11 +112,14 @@ Durable Objects** (via `partyserver`; one Durable Object = one match room, keyed
 - **Abuse gate (anonymous, no accounts):** because the Worker is publicly addressable, the
   `fetch` handler gates the socket in `onBeforeConnect` — it rejects (401) any connection without a
   valid short-lived HMAC **session token**, and rate-limits per IP (`ratelimits` in
-  `wrangler.jsonc`). The browser earns a token by passing an invisible **Cloudflare Turnstile**
-  challenge (`web/src/online/Turnstile.tsx`) and exchanging it at `POST /auth`; the socket reuses
-  the token across reconnects. The pure token logic lives in `packages/party/src/auth.ts` (unit
-  tested). The gate is **fail-open / disabled until its secrets (`TURNSTILE_SECRET`, `AUTH_SECRET`)
-  are set**, so dev and CI need no setup. Mobile doesn't mint a token yet (web-only for now). See
+  `wrangler.jsonc`). The client earns a token by passing an invisible **Cloudflare Turnstile**
+  challenge (web: `web/src/online/Turnstile.tsx`; mobile: a WebView in
+  `mobile/src/components/TurnstileModal.tsx`) and exchanging it at `POST /auth`; the socket reuses
+  the token across reconnects, and both apps mint a fresh one before it expires while in a room
+  (web also keeps it in `sessionStorage` across refreshes). The pure token logic lives in
+  `packages/party/src/auth.ts` (unit tested). The gate is **disabled until its secrets
+  (`TURNSTILE_SECRET`, `AUTH_SECRET`) are set**, so dev and CI need no setup; with only
+  `AUTH_SECRET` set, `/auth` fails closed (503) rather than mint unchallenged tokens. See
   `DEPLOY.md` §4.
 
 Scoped out for now: random matchmaking, accounts, spectators, chat, match history.
@@ -118,7 +129,7 @@ Scoped out for now: random matchmaking, accounts, spectators, chat, match histor
 | Task | Command |
 | --- | --- |
 | Install root (shared packages) | `npm install` |
-| Tests (engine + party) | `npm test` |
+| Tests (engine + protocol + party) | `npm test` |
 | Typecheck all packages | `npm run typecheck` |
 | Online server — dev / deploy | `npm run dev -w @mtt/party` (→ `127.0.0.1:1999`) · `npm run deploy -w @mtt/party` |
 | Web — dev / build | `cd web && npm run dev` · `npm run build` |
@@ -132,5 +143,5 @@ After any `npm install` in `mobile/`, the shared-package symlinks are recreated 
 
 - TypeScript everywhere. Keep `@mtt/engine` framework-agnostic (no React/DOM/RN imports) so it runs
   in web, React Native, tests, and a worker.
-- Treat `android-old/` as read-only history; new work goes in `packages/`, `web/`, `mobile/`.
+- New work goes in `packages/`, `web/`, `mobile/`.
 - Add or change a rule? Do it in `@mtt/engine` with a vitest test, then let the UIs use it.

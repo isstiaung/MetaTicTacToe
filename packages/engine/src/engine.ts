@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { Cell, GameState, Move, Outcome, Player, SubBoard } from './types';
 
 /** The eight winning lines of a 3x3 grid (rows, columns, diagonals). */
@@ -122,4 +124,13 @@ export function applyMove(state: GameState, board: number, cell: number): GameSt
     winner,
     lastMove: { board, cell },
   };
+}
+
+/**
+ * End an in-progress game by forfeit: `loser` concedes and the other player wins, with the
+ * boards left as they were. Throws if the game is already over.
+ */
+export function forfeit(state: GameState, loser: Player): GameState {
+  if (state.winner) throw new Error('The game is already over.');
+  return { ...state, winner: other(loser), activeBoard: null };
 }

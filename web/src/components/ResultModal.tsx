@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { useEffect, useRef, useState } from 'react';
 import type { GameState, Outcome } from '@mtt/engine';
 import { boardScore, gameSummaryText } from '@mtt/engine';
@@ -28,6 +30,35 @@ interface ResultModalProps {
    * player can't double-request a rematch.
    */
   pendingNote?: string;
+  /** An informational line under the actions (online), e.g. "Bob wants a rematch!". */
+  note?: string;
+  /** Overrides the line under the title, e.g. to explain a win by forfeit. */
+  subtitle?: string;
+}
+
+/**
+ * Copy text to the clipboard, preferring the async Clipboard API and falling
+ * back to a hidden-textarea + execCommand for older browsers and in-app
+ * webviews (e.g. Instagram/Facebook) that restrict the modern API. Must be
+ * called from a user gesture (it is — a button click).
+ */
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    if (!document.execCommand('copy')) throw new Error('copy command rejected');
+  } finally {
+    document.body.removeChild(ta);
+  }
 }
 
 export function ResultModal({
@@ -39,6 +70,8 @@ export function ResultModal({
   players,
   playAgainLabel = 'Play again',
   pendingNote,
+  note,
+  subtitle,
 }: ResultModalProps) {
   const playAgainRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
@@ -62,28 +95,24 @@ export function ResultModal({
   const title =
     outcome === 'draw' ? "It's a draw" : outcome === 'X' ? 'X wins!' : 'O wins!';
   const sub =
-    outcome === 'draw'
+    subtitle ??
+    (outcome === 'draw'
       ? 'Every board is settled with no line claimed.'
-      : 'Three claimed squares in a line.';
+      : 'Three claimed squares in a line.');
   const glyph = outcome === 'draw' ? 'Draw' : outcome;
 
-  const handleShare = async () => {
+  // Copy the result to the clipboard (Wordle-style) rather than going through
+  // the native share sheet: multi-line emoji grids get mangled or dropped by
+  // some share targets (notably Android apps), whereas a clipboard write
+  // preserves the block verbatim on every platform.
+  const handleCopy = async () => {
     const text = gameSummaryText(state, { players, url: window.location.origin });
-    // Prefer the native share sheet; fall back to copying to the clipboard.
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ text });
-        return;
-      } catch {
-        // User cancelled or share failed — fall through to clipboard.
-      }
-    }
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard unavailable — nothing more we can do.
+      // Clipboard genuinely unavailable — nothing more we can do.
     }
   };
 
@@ -139,8 +168,8 @@ export function ResultModal({
           >
             {playAgainLabel}
           </button>
-          <button type="button" className="btn btn--secondary" onClick={handleShare}>
-            {copied ? 'Copied!' : 'Share'}
+          <button type="button" className="btn btn--secondary" onClick={handleCopy}>
+            {copied ? 'Copied!' : 'Copy result'}
           </button>
           <button type="button" className="btn btn--ghost" onClick={onHome}>
             Back to menu
@@ -148,6 +177,7 @@ export function ResultModal({
           {pendingNote !== undefined && (
             <p className="modal__pending thinking-dots">{pendingNote}</p>
           )}
+          {note !== undefined && <p className="modal__pending">{note}</p>}
         </div>
       </div>
     </div>

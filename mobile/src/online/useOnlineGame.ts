@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Online (internet PvP) game hook.
  *
@@ -21,6 +23,7 @@ import type {
   Seat,
   ServerMessage,
 } from '@mtt/protocol';
+import { currentSessionToken } from './auth';
 import { PARTYKIT_HOST } from './config';
 import { loadName, loadPlayerId } from './identity';
 
@@ -41,12 +44,18 @@ export interface UseOnlineGame {
   code: string;
   /** Epoch-ms deadline for the current move (server auto-plays on lapse), or null. */
   turnDeadline: number | null;
-  /** A surfaced, human-readable error from the server, or null. */
+  /** Epoch-ms from which we may claim the win (opponent offline that long), or null. */
+  claimableAt: number | null;
+  /** The seat that lost by forfeit, or null. */
+  forfeit: Seat | null;
+  /** A surfaced, human-readable error from the server, or null. Cleared by the next action. */
   error: string | null;
   /** Send a move intent (server validates turn + legality). */
   sendMove: (board: number, cell: number) => void;
-  /** Ask for a rematch. */
+  /** Ask for (or accept) a rematch. */
   sendRematch: () => void;
+  /** Claim the win because the opponent has been offline too long. */
+  sendClaim: () => void;
   /** Leave the room and tear down the socket. */
   leave: () => void;
 }
@@ -63,6 +72,8 @@ export function useOnlineGame(code: string): UseOnlineGame {
   const [connected, setConnected] = useState(false);
   const [serverCode, setServerCode] = useState(code);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
+  const [claimableAt, setClaimableAt] = useState<number | null>(null);
+  const [forfeit, setForfeit] = useState<Seat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
@@ -118,6 +129,8 @@ export function useOnlineGame(code: string): UseOnlineGame {
           setPlayers(msg.players);
           setRematch(msg.rematch);
           setTurnDeadline(msg.turnDeadline);
+          setClaimableAt(msg.claimableAt);
+          setForfeit(msg.forfeit);
           break;
         case 'error':
           if (msg.code === 'not_joined') {
@@ -137,7 +150,13 @@ export function useOnlineGame(code: string): UseOnlineGame {
       if (cancelled) return;
       identityRef.current = { playerId, name };
 
-      socket = new PartySocket({ host: PARTYKIT_HOST, room: code });
+      // `query` runs on every (re)connect: attach the cached session token so the server's
+      // connect gate lets us through. The token is minted on the online menu before connecting.
+      socket = new PartySocket({
+        host: PARTYKIT_HOST,
+        room: code,
+        query: async () => ({ token: currentSessionToken() }),
+      });
       socketRef.current = socket;
       socket.addEventListener('open', handleOpen);
       socket.addEventListener('close', handleClose);
@@ -164,19 +183,20 @@ export function useOnlineGame(code: string): UseOnlineGame {
     };
   }, [code, sendJoin]);
 
-  const sendMove = useCallback((board: number, cell: number) => {
+  /** Send an intent, clearing any error left over from the previous one. */
+  const send = useCallback((msg: ClientMessage) => {
     const socket = socketRef.current;
     if (!socket) return;
-    const msg: ClientMessage = { type: 'move', board, cell };
+    setError(null);
     socket.send(JSON.stringify(msg));
   }, []);
 
-  const sendRematch = useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket) return;
-    const msg: ClientMessage = { type: 'rematch' };
-    socket.send(JSON.stringify(msg));
-  }, []);
+  const sendMove = useCallback(
+    (board: number, cell: number) => send({ type: 'move', board, cell }),
+    [send],
+  );
+  const sendRematch = useCallback(() => send({ type: 'rematch' }), [send]);
+  const sendClaim = useCallback(() => send({ type: 'claim' }), [send]);
 
   const leave = useCallback(() => {
     const socket = socketRef.current;
@@ -199,9 +219,12 @@ export function useOnlineGame(code: string): UseOnlineGame {
     connected,
     code: serverCode,
     turnDeadline,
+    claimableAt,
+    forfeit,
     error,
     sendMove,
     sendRematch,
+    sendClaim,
     leave,
   };
 }

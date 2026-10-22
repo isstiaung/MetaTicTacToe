@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { describe, it, expect } from 'vitest';
 import {
   createGame,
@@ -8,12 +10,30 @@ import {
   lineWinner,
   metaCells,
   outcomeOf,
+  forfeit,
 } from './engine';
 import { chooseAiMove } from './ai';
-import type { Cell, GameState } from './types';
+import type { Cell, GameState, Move, Player } from './types';
 
 function play(state: GameState, moves: [number, number][]): GameState {
   return moves.reduce((s, [b, c]) => applyMove(s, b, c), state);
+}
+
+/** Build a mid-game position from nine 9-char rows ('X' / 'O' / '.'), deriving board winners. */
+function position(rows: string[], currentPlayer: Player, activeBoard: number | null): GameState {
+  const boards = rows.map((row) => {
+    const cells = [...row].map((c) => (c === '.' ? null : c)) as Cell[];
+    return { cells, winner: outcomeOf(cells) };
+  });
+  return { boards, currentPlayer, activeBoard, winner: null, lastMove: null };
+}
+
+/** Whether the opponent can win the whole game on the very next move after `m`. */
+function handsOpponentTheWin(state: GameState, m: Move): boolean {
+  const next = applyMove(state, m.board, m.cell);
+  return getLegalMoves(next).some(
+    (r) => applyMove(next, r.board, r.cell).winner === next.currentPlayer,
+  );
 }
 
 describe('lineWinner', () => {
@@ -166,11 +186,52 @@ describe('AI', () => {
     let s = createGame();
     let guard = 0;
     while (!s.winner && getLegalMoves(s).length > 0 && guard < 200) {
-      const m = chooseAiMove(s, guard % 2 === 0 ? 'hard' : 'easy', () => 0.5)!;
+      const m = chooseAiMove(s, guard % 2 === 0 ? 'hard' : 'easy', () => 0.5, { maxNodes: 5_000 })!;
       expect(isLegalMove(s, m.board, m.cell)).toBe(true);
       s = applyMove(s, m.board, m.cell);
       guard += 1;
     }
     expect(guard).toBeLessThan(200); // game terminates
+  });
+
+  it('hard does not hand the opponent an immediate game win when a safe move exists', () => {
+    // O must play in board 5. Cell 4 routes X to the finished board 4 — a free move, and X then
+    // wins the game. The old fixed-depth search spent its whole node budget on the first
+    // candidate and judged the rest on a one-ply static score, so it played exactly that.
+    const s = position(
+      [
+        'XO.X..XX.', '..XX.OX.X', 'OO.O.XXOX',
+        'OOOO....X', 'O.X..X..X', '...X..XOX',
+        '.OO.OO.O.', '.XXXX.XOX', 'O.O.O..OO',
+      ],
+      'O',
+      5,
+    );
+    expect(handsOpponentTheWin(s, { board: 5, cell: 4 })).toBe(true); // the trap is real
+    const m = chooseAiMove(s, 'hard', Math.random, { maxTimeMs: Infinity })!;
+    expect(handsOpponentTheWin(s, m)).toBe(false);
+  });
+
+  it('hard still answers within its time limit', () => {
+    const start = Date.now();
+    chooseAiMove(createGame(), 'hard', Math.random, { maxNodes: Infinity, maxTimeMs: 50 });
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+});
+
+describe('forfeit', () => {
+  it('ends the game with the other player as winner, boards untouched', () => {
+    const s = play(createGame(), [[4, 0]]);
+    const f = forfeit(s, 'X');
+    expect(f.winner).toBe('O');
+    expect(f.activeBoard).toBeNull();
+    expect(f.boards).toBe(s.boards);
+    expect(getLegalMoves(f)).toEqual([]);
+  });
+
+  it('throws once the game is already over', () => {
+    const s = createGame();
+    s.winner = 'draw';
+    expect(() => forfeit(s, 'X')).toThrow();
   });
 });

@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Pure TypeScript Ultimate / Meta Tic-Tac-Toe rules engine + AI. No UI dependencies.",
+  "license": "GPL-3.0-or-later",
+  "author": "Sainath Rajagopal <hello@isstiaung.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isstiaung/MetaTicTacToe.git",
+    "directory": "packages/engine"
+  },
   "main": "src/index.ts",
   "module": "src/index.ts",
   "types": "src/index.ts",

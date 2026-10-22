@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 export type {
   Player,
   Cell,
@@ -20,9 +22,11 @@ export {
   isLegalMove,
   metaCells,
   applyMove,
+  forfeit,
 } from './engine';
 
 export { chooseAiMove } from './ai';
+export type { AiLimits } from './ai';
 
 export { boardScore, gameSummaryText } from './summary';
 export type { BoardScore, SummaryOptions } from './summary';

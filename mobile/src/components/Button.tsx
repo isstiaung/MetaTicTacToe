@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { memo } from 'react';
 import {
   Pressable,
@@ -36,6 +38,8 @@ function ButtonImpl({ label, onPress, variant = 'primary', style }: ButtonProps)
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
         styles.button,
         containerStyle,

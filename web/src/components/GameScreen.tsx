@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { GameState, Player } from '@mtt/engine';
 import { boardScore } from '@mtt/engine';
 import { MetaBoard } from './MetaBoard';
+import { MatchStats } from './MatchStats';
 import { Score } from './Score';
 import { HelpButton } from './HelpButton';
 import { cn } from '../theme';
@@ -115,6 +118,8 @@ export function GameScreen({
       </div>
 
       <MetaBoard state={state} locked={locked} onPlay={onPlay} />
+
+      <MatchStats state={state} />
     </main>
   );
 }

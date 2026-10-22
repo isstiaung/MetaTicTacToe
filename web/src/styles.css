@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * Global styles. Color/spacing/motion values are injected as CSS custom
  * properties from the shared @mtt/theme tokens (see theme.ts) so this file
@@ -149,6 +151,12 @@ a {
 
 .btn:active {
   transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn--primary {
@@ -312,6 +320,16 @@ a {
   font-size: var(--mtt-size-sm);
   color: var(--mtt-ink-soft);
   min-height: 1.2em;
+}
+
+/* A row of buttons under the status line (online: rematch / claim win). */
+.status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--mtt-space-sm);
+  margin-top: var(--mtt-space-xs);
 }
 
 /* Subtle footnote (e.g. the online room-expiry notice). */
@@ -910,6 +928,102 @@ a {
   margin: 0;
   color: var(--mtt-ink-soft);
   font-size: var(--mtt-size-sm);
+}
+
+/* ---------- Match stats panel ---------- */
+
+.stats {
+  border: 1px solid var(--mtt-line);
+  border-radius: var(--mtt-radius-lg);
+  background: var(--mtt-surface-alt);
+  padding: var(--mtt-space-md) var(--mtt-space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mtt-space-sm);
+}
+
+.stats__title {
+  text-align: center;
+  font-size: var(--mtt-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mtt-muted);
+}
+
+.stats__grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: var(--mtt-space-xl);
+  row-gap: var(--mtt-space-xs);
+}
+
+.stats__metric {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--mtt-size-sm);
+  font-weight: 600;
+  color: var(--mtt-ink-soft);
+}
+
+.stats__hint {
+  font-size: var(--mtt-size-xs);
+  font-weight: 400;
+  color: var(--mtt-muted);
+}
+
+.stats__head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: var(--mtt-size-sm);
+  font-weight: 700;
+}
+
+.stats__name {
+  font-weight: 600;
+  max-width: 9ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats__you {
+  color: var(--mtt-ink-soft);
+  font-weight: 500;
+}
+
+.stats__val {
+  justify-self: center;
+  min-width: 2.5ch;
+  text-align: center;
+  font-size: var(--mtt-size-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats__val--X {
+  color: var(--mtt-x);
+}
+
+.stats__val--O {
+  color: var(--mtt-o);
+}
+
+/* A live match point glows in the player's accent — one win from victory. */
+.stats__val--mp {
+  border-radius: var(--mtt-radius-pill);
+  padding: 1px 10px;
+}
+
+.stats__val--mp.stats__val--X {
+  background: var(--mtt-x-soft);
+}
+
+.stats__val--mp.stats__val--O {
+  background: var(--mtt-o-soft);
 }
 
 /* ---------- Online auth (Turnstile gate) ---------- */

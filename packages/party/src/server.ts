@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Cloudflare Workers adapter (via partyserver). One Durable Object instance == one match room.
  *
@@ -16,16 +18,18 @@
  */
 import { Server, routePartykitRequest } from 'partyserver';
 import type { Connection } from 'partyserver';
-import type { ClientMessage } from '@mtt/protocol';
+import type { ServerMessage } from '@mtt/protocol';
 import {
   applyTimeout,
   createRoom,
   disconnect,
   reduce,
   ROOM_TTL_MS,
+  seatOfPlayer,
   syncMessage,
   type RoomState,
 } from './room';
+import { parseClientMessage } from './messages';
 import { authorizeConnection, issueSessionToken, verifyTurnstile } from './auth';
 
 /** Cloudflare's rate-limit binding surface (configured under `ratelimits` in wrangler.jsonc). */
@@ -64,10 +68,10 @@ export class GameServer extends Server<Env> {
   private async getRoom(): Promise<RoomState> {
     if (!this.room) {
       const stored = await this.ctx.storage.get<RoomState>('room');
-      // Coalesce `turnDeadline` so rooms persisted before the move clock existed
-      // load with a defined (null) value rather than `undefined`.
+      // Coalesce fields added after launch so rooms persisted before they existed
+      // load with defined (null) values rather than `undefined`.
       this.room = stored
-        ? { ...stored, turnDeadline: stored.turnDeadline ?? null }
+        ? { ...stored, turnDeadline: stored.turnDeadline ?? null, forfeit: stored.forfeit ?? null }
         : createRoom(this.name);
     }
     return this.room;
@@ -75,6 +79,18 @@ export class GameServer extends Server<Env> {
 
   private async persist(): Promise<void> {
     if (this.room) await this.ctx.storage.put('room', this.room);
+  }
+
+  /**
+   * Whether a connection other than `except` is still bound to `playerId`. A player can briefly
+   * hold two: after a network switch the client reconnects and rejoins on a new socket while the
+   * server has yet to notice the old one died — its late close must not mark them offline.
+   */
+  private hasOtherConnection(playerId: string, except: Connection<ConnState>): boolean {
+    for (const c of this.getConnections<ConnState>()) {
+      if (c.id !== except.id && c.state?.playerId === playerId) return true;
+    }
+    return false;
   }
 
   /** True while at least one seat is connected — the move clock only runs then. */
@@ -147,20 +163,22 @@ export class GameServer extends Server<Env> {
   }
 
   async onMessage(sender: Connection<ConnState>, raw: string | ArrayBuffer) {
-    if (typeof raw !== 'string') return;
-
-    let msg: ClientMessage;
-    try {
-      msg = JSON.parse(raw) as ClientMessage;
-    } catch {
-      sender.send(
-        JSON.stringify({ type: 'error', code: 'bad_message', message: 'Malformed message.' }),
-      );
+    const msg = typeof raw === 'string' ? parseClientMessage(raw) : null;
+    if (!msg) {
+      const error: ServerMessage = { type: 'error', code: 'bad_message', message: 'Malformed message.' };
+      sender.send(JSON.stringify(error));
       return;
     }
 
     const room = await this.getRoom();
-    const connPlayerId = msg.type === 'join' ? msg.playerId : sender.state?.playerId;
+    const connPlayerId = sender.state?.playerId;
+
+    if (msg.type === 'leave' && connPlayerId) {
+      // This socket is done; unbind it so its close doesn't count again. The player only goes
+      // offline if this was their last connection (e.g. not one of two open tabs).
+      sender.setState({});
+      if (this.hasOtherConnection(connPlayerId, sender)) return;
+    }
 
     const result = reduce(room, connPlayerId, msg, Date.now());
     this.room = result.room;
@@ -171,16 +189,32 @@ export class GameServer extends Server<Env> {
     }
 
     for (const m of result.reply) sender.send(JSON.stringify(m));
+    if (result.reseated) this.sendSeats();
     if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
     await this.syncAlarm();
   }
 
+  /** Tell every joined connection which seat it now holds (seats swap on a rematch). */
+  private sendSeats(): void {
+    const room = this.room;
+    if (!room) return;
+    for (const c of this.getConnections<ConnState>()) {
+      const seat = c.state?.playerId ? seatOfPlayer(room, c.state.playerId) : undefined;
+      if (seat) {
+        const assigned: ServerMessage = { type: 'assigned', you: seat, code: room.code };
+        c.send(JSON.stringify(assigned));
+      }
+    }
+  }
+
   async onClose(conn: Connection<ConnState>) {
     const playerId = conn.state?.playerId;
     if (!playerId) return;
+    // A newer connection already holds this player (a reconnect raced ahead of this close).
+    if (this.hasOtherConnection(playerId, conn)) return;
     const room = await this.getRoom();
-    const result = disconnect(room, playerId);
+    const result = disconnect(room, playerId, Date.now());
     this.room = result.room;
     if (result.broadcast) this.broadcast(JSON.stringify(syncMessage(this.room)));
     await this.persist();
@@ -208,8 +242,9 @@ function json(data: unknown, status: number, headers: Record<string, string>): R
 
 /**
  * `POST /auth` — trade a Turnstile token for a session token. Rate-limited per IP. In production
- * the Turnstile check runs; in dev (no secret) it's skipped and a placeholder token is returned
- * (the connect gate is also disabled there, so any value passes).
+ * the Turnstile check runs; in dev (no secrets) it's skipped and a placeholder token is returned
+ * (the connect gate is also disabled there, so any value passes). Half-configured —
+ * `AUTH_SECRET` without `TURNSTILE_SECRET` — it refuses (503) rather than mint free tokens.
  */
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const cors = corsHeaders(env);
@@ -233,6 +268,10 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   if (env.TURNSTILE_SECRET) {
     const human = await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET, ip);
     if (!human) return json({ error: 'challenge_failed' }, 403, cors);
+  } else if (env.AUTH_SECRET) {
+    // Gate on but no challenge configured: minting real tokens for anyone would make the gate
+    // look active while letting everyone through. Fail closed until TURNSTILE_SECRET is set.
+    return json({ error: 'turnstile_not_configured' }, 503, cors);
   }
 
   const token = env.AUTH_SECRET

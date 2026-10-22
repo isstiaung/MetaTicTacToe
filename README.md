@@ -7,8 +7,9 @@
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-> The original native Android (Java) app lives on under [`android-old/`](android-old/) — this repo is its port to a shared-engine web + mobile codebase.
+> This started life as a native Android (Java) app and was rewritten as a shared-engine web + mobile codebase.
 
 ## How to play
 
@@ -25,7 +26,7 @@ You play on a 3×3 grid of nine small tic-tac-toe boards.
 ## Features
 
 - 🎮 **Local 2-player** (pass-and-play) on web and mobile
-- 🤖 **Vs-computer** with Easy and Hard difficulty (depth-limited minimax + alpha-beta)
+- 🤖 **Vs-computer** with Easy and Hard difficulty (iterative-deepening minimax + alpha-beta)
 - 🌐 **Online PvP** — play a friend over the internet via a shareable room code (authoritative server, reconnect, rematch)
 - 🧠 **One shared rules engine** — web, mobile, and the server can never disagree on the rules
 - 🎨 **Modern-minimal design** from a shared token system; the active board glows, finished boards fade
@@ -42,22 +43,20 @@ MetaTicTacToe/
 │  └─ party/    # @mtt/party    — Cloudflare Workers server (partyserver, reuses the engine)
 ├─ web/         # Vite + React + TypeScript
 ├─ mobile/      # Expo (React Native) + TypeScript, Android target
-├─ android-old/ # archived original Java/Android app (read-only history)
-├─ CLAUDE.md    # contributor / agent guide (deep detail)
-└─ progress.txt # migration log
+└─ CLAUDE.md    # contributor / agent guide (deep detail)
 ```
 
 `web/` and `mobile/` are standalone apps that consume the shared packages by **path alias to their TypeScript source** — no build step for the shared code. See [`CLAUDE.md`](CLAUDE.md) for the wiring details.
 
 ## Getting started
 
-**Prerequisites:** Node.js 18+ and npm. For the mobile app, the [Expo](https://docs.expo.dev/) tooling (`npx expo`), plus an Android emulator or the Expo Go app to run on a device.
+**Prerequisites:** Node.js 20+ and npm. For the mobile app, the [Expo](https://docs.expo.dev/) tooling (`npx expo`), plus an Android emulator or the Expo Go app to run on a device.
 
 ```bash
 git clone git@github.com:isstiaung/MetaTicToe.git
 cd MetaTicToe
 npm install        # installs the shared packages (engine + theme)
-npm test           # run the engine test suite (21 tests)
+npm test           # run the engine, protocol and server test suites
 ```
 
 ### Run the web app
@@ -124,8 +123,8 @@ The look comes from **`@mtt/theme`**, a single set of design tokens (palette, sp
 
 ## The original Android app
 
-The first version of MetaTicTacToe was a native Android app written in Java. It's preserved verbatim under [`android-old/`](android-old/) (with git history intact) and is no longer developed — the rules in `@mtt/engine` are a faithful port of its logic.
+The first version of MetaTicTacToe was a native Android app written in Java; it's no longer maintained, and the rules in `@mtt/engine` are a faithful port of its logic.
 
 ## License
 
-This project does not yet declare a license. Until one is added, all rights are reserved by the author.
+[**GPL-3.0-or-later**](LICENSE). MetaTicTacToe is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but **without any warranty** — see the [`LICENSE`](LICENSE) file for the full text.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Online (internet PvP) game hook.
  *
@@ -10,12 +12,14 @@
  *     the server can re-seat them.
  *  2. On socket `open` we send `join {playerId, name}` — also on every automatic
  *     reconnect (partysocket reconnects for us).
- *  3. `assigned` stores our seat; `sync` drives game/status/players/rematch;
- *     `error` with `not_joined` triggers a re-join, everything else surfaces a note.
+ *  3. `assigned` stores our seat (re-sent when seats swap on a rematch); `sync` drives
+ *     game/status/players/rematch/claim; `error` with `not_joined` triggers a re-join,
+ *     everything else surfaces a note.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PartySocket } from 'partysocket';
 import { createGame } from '@mtt/engine';
+import { isValidRoomCode, normalizeRoomCode } from '@mtt/protocol';
 import { currentSessionToken } from './auth';
 import type { GameState } from '@mtt/engine';
 import type {
@@ -74,31 +78,14 @@ export function storeName(name: string): void {
   }
 }
 
-const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-/** Generate a short, human-friendly room code (no ambiguous 0/O/1/I). */
-export function generateRoomCode(length = 4): string {
-  let code = '';
-  const bytes = new Uint32Array(length);
-  crypto.getRandomValues(bytes);
-  for (let i = 0; i < length; i += 1) {
-    code += ROOM_CODE_ALPHABET[bytes[i] % ROOM_CODE_ALPHABET.length];
-  }
-  return code;
-}
-
-/** Normalise a user-typed code to the canonical room name (upper-case). */
-export function normalizeRoomCode(code: string): string {
-  return code.trim().toUpperCase();
-}
-
 const ROOM_PARAM = 'room';
 
-/** Read a normalised room code from the current URL (`?room=CODE`), or ''. */
+/** Read a valid room code from the current URL (`?room=CODE`), or '' if there is none. */
 export function getRoomFromUrl(): string {
   try {
     const params = new URLSearchParams(window.location.search);
-    return normalizeRoomCode(params.get(ROOM_PARAM) ?? '');
+    const code = normalizeRoomCode(params.get(ROOM_PARAM) ?? '');
+    return isValidRoomCode(code) ? code : '';
   } catch {
     return '';
   }
@@ -142,10 +129,15 @@ export interface OnlineGame {
   code: string;
   /** Epoch-ms deadline for the current move (server auto-plays on lapse), or null. */
   turnDeadline: number | null;
+  /** Epoch-ms from which we may claim the win (opponent offline that long), or null. */
+  claimableAt: number | null;
+  /** The seat that lost by forfeit, or null. */
+  forfeit: Seat | null;
   /** A transient, human-readable error surfaced to the UI (e.g. illegal move). */
   error: string | null;
   sendMove: (board: number, cell: number) => void;
   sendRematch: () => void;
+  sendClaim: () => void;
   leave: () => void;
 }
 
@@ -161,6 +153,8 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
   const [rematch, setRematch] = useState<RematchState>({ X: false, O: false });
   const [connected, setConnected] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
+  const [claimableAt, setClaimableAt] = useState<number | null>(null);
+  const [forfeit, setForfeit] = useState<Seat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
@@ -224,6 +218,8 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
           setPlayers(msg.players);
           setRematch(msg.rematch);
           setTurnDeadline(msg.turnDeadline);
+          setClaimableAt(msg.claimableAt);
+          setForfeit(msg.forfeit);
           break;
         case 'error':
           if (msg.code === 'not_joined') {
@@ -270,7 +266,13 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
   );
 
   const sendRematch = useCallback(() => {
+    setError(null);
     send({ type: 'rematch' });
+  }, [send]);
+
+  const sendClaim = useCallback(() => {
+    setError(null);
+    send({ type: 'claim' });
   }, [send]);
 
   const leave = useCallback(() => {
@@ -286,9 +288,12 @@ export function useOnlineGame(code: string, name: string): OnlineGame {
     connected,
     code,
     turnDeadline,
+    claimableAt,
+    forfeit,
     error,
     sendMove,
     sendRematch,
+    sendClaim,
     leave,
   };
 }

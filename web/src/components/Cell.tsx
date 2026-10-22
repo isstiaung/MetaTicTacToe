@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { memo } from 'react';
 import type { Cell as CellValue } from '@mtt/engine';
 import { cn } from '../theme';

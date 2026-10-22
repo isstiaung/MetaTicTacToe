@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { memo } from 'react';
 import type { SubBoard as SubBoardState, Move } from '@mtt/engine';
 import { isFinished } from '@mtt/engine';

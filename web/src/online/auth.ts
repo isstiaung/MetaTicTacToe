@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /**
  * Client side of the online-play abuse gate (see `packages/party/src/auth.ts`).
  *
  * The browser solves a Cloudflare Turnstile challenge once (the `<Turnstile>` widget),
  * then trades that token here for a short-lived *session* token via `POST /auth`. The
- * session token is cached in memory and handed to the socket on every (re)connect — so
- * reconnects never trigger another challenge.
+ * session token is cached (in memory, mirrored to `sessionStorage` so a page refresh keeps it)
+ * and handed to the socket on every (re)connect — so reconnects never trigger another challenge.
  *
  * Dev needs zero setup: the site key defaults to Turnstile's always-pass test key and the
  * dev Worker returns a placeholder token (its connect gate is disabled).
@@ -28,8 +30,24 @@ function authBaseUrl(): string {
   return `${isLocal ? 'http' : 'https'}://${PARTYKIT_HOST}`;
 }
 
+const STORAGE_KEY = 'mtt.session';
+
 let cachedToken: string | null = null;
 let cachedExpMs = 0;
+
+// Restore a token minted earlier in this tab, so a refresh doesn't re-run the challenge.
+try {
+  const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null') as {
+    token?: unknown;
+    expMs?: unknown;
+  } | null;
+  if (typeof stored?.token === 'string' && typeof stored.expMs === 'number') {
+    cachedToken = stored.token;
+    cachedExpMs = stored.expMs;
+  }
+} catch {
+  // Storage unavailable or corrupt — mint a fresh token instead.
+}
 
 /** Best-effort read of the `{ exp }` (unix seconds) from a session token's payload. */
 function decodeExpMs(token: string): number {
@@ -44,9 +62,20 @@ function decodeExpMs(token: string): number {
   }
 }
 
+/** Tokens are treated as expired this long before their real expiry. */
+const EXPIRY_MARGIN_MS = 30_000;
+
 /** True while a non-expired session token is cached (30s safety margin). */
 export function hasSessionToken(): boolean {
-  return cachedToken !== null && Date.now() < cachedExpMs - 30_000;
+  return cachedToken !== null && Date.now() < sessionTokenExpiresAt();
+}
+
+/**
+ * Epoch-ms at which the cached token stops counting as valid (0 if none) — when a fresh one
+ * must be minted so later reconnects aren't rejected.
+ */
+export function sessionTokenExpiresAt(): number {
+  return cachedToken === null ? 0 : cachedExpMs - EXPIRY_MARGIN_MS;
 }
 
 /**
@@ -65,6 +94,11 @@ export async function exchangeTurnstileToken(turnstileToken: string): Promise<vo
   cachedToken = token;
   // Real tokens carry an exp; the dev placeholder doesn't — fall back to ~1h.
   cachedExpMs = decodeExpMs(token) || Date.now() + 60 * 60 * 1000;
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token, expMs: cachedExpMs }));
+  } catch {
+    // Storage unavailable — the in-memory token still works until a refresh.
+  }
 }
 
 /**

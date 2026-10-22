@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import { useState } from 'react';
 import {
   Pressable,
@@ -9,7 +11,8 @@ import {
 import { palette, radius, space, typography } from '@mtt/theme';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
-import { generateCode, normalizeCode } from '../online/config';
+import * as Crypto from 'expo-crypto';
+import { generateRoomCode, isValidRoomCode, normalizeRoomCode } from '@mtt/protocol';
 
 interface OnlineMenuScreenProps {
   name: string;
@@ -25,10 +28,11 @@ export function OnlineMenuScreen({
   onConnect,
   onHome,
 }: OnlineMenuScreenProps) {
+  // Normalised as typed (upper-case, code alphabet only), so it's always a code prefix.
   const [joinCode, setJoinCode] = useState('');
 
   const trimmedName = name.trim();
-  const canJoin = normalizeCode(joinCode).length === 4;
+  const canJoin = isValidRoomCode(joinCode);
 
   return (
     <View style={styles.container}>
@@ -62,7 +66,7 @@ export function OnlineMenuScreen({
         <View style={styles.section}>
           <Button
             label="Create game"
-            onPress={() => onConnect(generateCode())}
+            onPress={() => onConnect(generateRoomCode(Crypto.getRandomBytes))}
           />
           <Text style={styles.hint} allowFontScaling={false}>
             We'll make a room and give you a code to share.
@@ -77,17 +81,16 @@ export function OnlineMenuScreen({
           </Text>
           <TextField
             value={joinCode}
-            onChangeText={(t) => setJoinCode(normalizeCode(t))}
+            onChangeText={(t) => setJoinCode(normalizeRoomCode(t))}
             placeholder="CODE"
             autoCapitalize="characters"
             autoCorrect={false}
-            maxLength={4}
             style={styles.codeInput}
           />
           <Button
             label="Join game"
             variant="secondary"
-            onPress={() => canJoin && onConnect(normalizeCode(joinCode))}
+            onPress={() => canJoin && onConnect(joinCode)}
             style={canJoin ? undefined : styles.disabled}
           />
         </View>
