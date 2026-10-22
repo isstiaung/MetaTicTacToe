@@ -27,6 +27,9 @@ export function useSessionToken(): [ready: boolean, markReady: () => void] {
   return [ready, markReady];
 }
 
+/** How long to wait for Turnstile before also offering a retry (it can stall without erroring). */
+const STALL_MS = 30_000;
+
 interface AuthChallengeProps {
   /** Called once a session token has been minted and cached. */
   onReady: () => void;
@@ -39,8 +42,17 @@ interface AuthChallengeProps {
  */
 export function AuthChallenge({ onReady }: AuthChallengeProps) {
   const [failed, setFailed] = useState(false);
+  // Still no token after STALL_MS: the widget stays up (it may yet succeed, or be awaiting a
+  // click), but a retry is offered so the player is never stuck on "Verifying…".
+  const [stalled, setStalled] = useState(false);
   // Bumping this remounts the widget to retry after a failure.
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (failed) return;
+    const id = setTimeout(() => setStalled(true), STALL_MS);
+    return () => clearTimeout(id);
+  }, [failed, attempt]);
 
   const handleVerify = useCallback(
     async (turnstileToken: string) => {
@@ -56,6 +68,7 @@ export function AuthChallenge({ onReady }: AuthChallengeProps) {
 
   const retry = useCallback(() => {
     setFailed(false);
+    setStalled(false);
     setAttempt((n) => n + 1);
   }, []);
 
@@ -80,7 +93,14 @@ export function AuthChallenge({ onReady }: AuthChallengeProps) {
         onVerify={handleVerify}
         onError={() => setFailed(true)}
       />
-      <span className="status__hint">Verifying you’re human…</span>
+      <span className="status__hint">
+        {stalled ? 'Verification is taking longer than usual.' : 'Verifying you’re human…'}
+      </span>
+      {stalled && (
+        <button type="button" className="btn btn--ghost" onClick={retry}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }
