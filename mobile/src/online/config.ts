@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 /**
  * Online-mode configuration: the PartyKit host and the Turnstile settings. Room codes are

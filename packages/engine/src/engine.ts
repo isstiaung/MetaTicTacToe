@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import type { Cell, GameState, Move, Outcome, Player, SubBoard } from './types';
 

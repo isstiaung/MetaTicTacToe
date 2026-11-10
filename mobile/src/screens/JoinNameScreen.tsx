@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { Pressable, StyleSheet, Text, type TextStyle, View } from 'react-native';
 import { palette, space, typography } from '@mtt/theme';

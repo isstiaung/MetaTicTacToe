@@ -18,7 +18,7 @@
 - [ ] If web changed: `npm run build --prefix web` succeeds
 - [ ] If mobile changed: `npm run typecheck --prefix mobile` succeeds
 - [ ] Rule/AI changes were made in `@mtt/engine` and covered by a vitest test
-- [ ] New source files include the SPDX header (`// SPDX-License-Identifier: GPL-3.0-or-later`)
+- [ ] New source files include the SPDX header (`// SPDX-License-Identifier: MIT`)
 - [ ] PR targets `main` (not `deploy-app`)
 
 ## Screenshots / recording (for UI changes)

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 /** Web Worker entry: computes one AI move per request, off the main thread (see `aiClient.ts`). */
 import { chooseAiMove } from '@mtt/engine';

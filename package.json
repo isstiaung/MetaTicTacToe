@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "description": "Ultimate / Meta Tic-Tac-Toe — a shared TypeScript engine powering web and mobile apps.",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

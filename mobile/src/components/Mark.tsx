@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { memo, useEffect, useRef } from 'react';
 import { Animated, StyleSheet, type TextStyle } from 'react-native';

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Shared WebSocket wire protocol (types + room-code helpers) for online MetaTicTacToe (server + clients).",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

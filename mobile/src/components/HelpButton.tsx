@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, type TextStyle, type ViewStyle } from 'react-native';

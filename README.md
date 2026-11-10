@@ -9,7 +9,7 @@
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > This started life as a native Android (Java) app and was rewritten as a shared-engine web + mobile codebase.
 
@@ -132,4 +132,4 @@ The first version of MetaTicTacToe was a native Android app written in Java; it'
 
 ## License
 
-[**GPL-3.0-or-later**](LICENSE). MetaTicTacToe is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but **without any warranty** — see the [`LICENSE`](LICENSE) file for the full text.
+[**MIT**](LICENSE) © Sainath Rajagopal. You're free to use, copy, modify, and distribute this code, including commercially, as long as the copyright and license notice are kept. It comes **without any warranty** — see [`LICENSE`](LICENSE) for the full text.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { useMemo } from 'react';
 import type { GameState } from '@mtt/engine';

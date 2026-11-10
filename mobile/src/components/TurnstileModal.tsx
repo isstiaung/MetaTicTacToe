@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { Modal, Pressable, StyleSheet, Text, type TextStyle, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
