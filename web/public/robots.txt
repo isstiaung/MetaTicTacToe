@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mttt.isstiaung.me/sitemap.xml

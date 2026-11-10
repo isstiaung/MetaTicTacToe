@@ -2,6 +2,8 @@
 
 **Ultimate / Meta Tic-Tac-Toe** — nine tic-tac-toe boards inside one big board, where your move decides where your opponent must play next. Built as a TypeScript monorepo: one shared game engine powering a **web** app and a **React Native (Expo)** app, with local 2-player, a vs-computer AI, and online PvP.
 
+### ▶️ Play now: **[mttt.isstiaung.me](https://mttt.isstiaung.me)** — free, no sign-up
+
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -27,7 +29,7 @@ You play on a 3×3 grid of nine small tic-tac-toe boards.
 
 - 🎮 **Local 2-player** (pass-and-play) on web and mobile
 - 🤖 **Vs-computer** with Easy and Hard difficulty (iterative-deepening minimax + alpha-beta)
-- 🌐 **Online PvP** — play a friend over the internet via a shareable room code (authoritative server, reconnect, rematch)
+- 🌐 **Online PvP** — play a friend over the internet via a shareable link or room code (authoritative server, reconnect, rematch with sides swapped, claim the win if your opponent leaves)
 - 🧠 **One shared rules engine** — web, mobile, and the server can never disagree on the rules
 - 🎨 **Modern-minimal design** from a shared token system; the active board glows, finished boards fade
 - ♿ Accessible and responsive web client (keyboard play, focus management, reduced-motion)
@@ -53,9 +55,9 @@ MetaTicTacToe/
 **Prerequisites:** Node.js 20+ and npm. For the mobile app, the [Expo](https://docs.expo.dev/) tooling (`npx expo`), plus an Android emulator or the Expo Go app to run on a device.
 
 ```bash
-git clone git@github.com:isstiaung/MetaTicToe.git
-cd MetaTicToe
-npm install        # installs the shared packages (engine + theme)
+git clone git@github.com:isstiaung/MetaTicTacToe.git
+cd MetaTicTacToe
+npm install        # installs the shared packages (engine, theme, protocol, party)
 npm test           # run the engine, protocol and server test suites
 ```
 
@@ -81,8 +83,8 @@ npm run typecheck
 ### Engine tests & types
 
 ```bash
-npm test           # vitest (rules, routing + free-move, win/draw, AI legality)
-npm run typecheck  # typecheck engine + theme
+npm test           # vitest (rules, routing + free-move, win/draw, AI, room codes, server)
+npm run typecheck  # typecheck all shared packages
 ```
 
 ## Online multiplayer
@@ -110,14 +112,13 @@ then set the host values to the resulting `*.workers.dev` URL. See [`DEPLOY.md`]
 
 The heart of the project is **`@mtt/engine`** — a small, pure, framework-agnostic TypeScript module that owns all the rules and the AI. It exposes an immutable `GameState` and functions like `createGame`, `applyMove` (throws on illegal moves), `getLegalMoves`, `isLegalMove`, and `chooseAiMove`. Both UIs hold one `GameState` and replace it via the engine — they never re-implement the rules.
 
-Because the engine has no UI or platform dependencies, the **same code** runs in the browser, in React Native, in tests, in a web worker — and would run unchanged on a server for online play (see Roadmap).
+Because the engine has no UI or platform dependencies, the **same code** runs in the browser, in React Native, in tests, in a Web Worker (the web app's AI), and on the online game server.
 
 The look comes from **`@mtt/theme`**, a single set of design tokens (palette, spacing, type, motion, shadows) shared by both apps, so the design stays consistent and evolves from one place.
 
 ## Roadmap
 
 - 🤝 **Random matchmaking** — quick-match with a stranger (online play today is private room codes)
-- 🔗 Deep-link invites (tap a link to join a room)
 - 🏆 Match history / simple accounts
 - 🎚️ More AI difficulty tuning
 
