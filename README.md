@@ -108,6 +108,10 @@ Point the clients at it:
 Deploy to your own Cloudflare account (free) with `npm run deploy -w @mtt/party` (`wrangler deploy`),
 then set the host values to the resulting `*.workers.dev` URL. See [`DEPLOY.md`](DEPLOY.md).
 
+> **Forking?** `packages/party/wrangler.jsonc` and `web/wrangler.jsonc` route to this project's own
+> domains (`party.mttt.isstiaung.me`, `mttt.isstiaung.me`). Change or remove their `routes` before
+> deploying to your account, or the deploy fails on a zone you don't own.
+
 ## Architecture
 
 The heart of the project is **`@mtt/engine`** — a small, pure, framework-agnostic TypeScript module that owns all the rules and the AI. It exposes an immutable `GameState` and functions like `createGame`, `applyMove` (throws on illegal moves), `getLegalMoves`, `isLegalMove`, and `chooseAiMove`. Both UIs hold one `GameState` and replace it via the engine — they never re-implement the rules.
