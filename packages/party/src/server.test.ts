@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 /**
  * Adapter tests for `server.ts`: the parts that depend on live connections (which socket is bound

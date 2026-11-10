@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 /**
  * Runs the engine's AI in a Web Worker (`aiWorker.ts`) so a `hard` search never blocks clicks,

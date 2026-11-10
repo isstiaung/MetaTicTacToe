@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 /**
  * Client side of the online-play abuse gate (see `packages/party/src/auth.ts`) for mobile.

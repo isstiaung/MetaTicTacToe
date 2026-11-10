@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
 import { boardScore, isLegalMove } from '@mtt/engine';

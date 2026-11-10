@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { Fragment } from 'react';
 import type { GameState, Player } from '@mtt/engine';

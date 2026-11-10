@@ -5,7 +5,7 @@ TypeScript monorepo with one shared, framework-agnostic rules engine driving a *
 **React Native (Expo)** app, plus an authoritative online server on Cloudflare Workers.
 
 By contributing you agree that your contributions are licensed under the project's
-[GPL-3.0-or-later](LICENSE).
+[MIT License](LICENSE).
 
 ## The golden rule: the engine is the single source of truth
 
@@ -77,7 +77,7 @@ See [`DEPLOY.md`](DEPLOY.md) for the production setup.
 - [ ] If you touched the web app: `npm run build --prefix web` succeeds.
 - [ ] If you touched the mobile app: `npm run typecheck --prefix mobile` succeeds.
 - [ ] Rule/AI changes were made in `@mtt/engine` and covered by a vitest test.
-- [ ] New source files carry the SPDX header: `// SPDX-License-Identifier: GPL-3.0-or-later`.
+- [ ] New source files carry the SPDX header: `// SPDX-License-Identifier: MIT`.
 
 CI runs these same checks on every PR (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 

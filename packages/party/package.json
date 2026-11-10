@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Authoritative game server for online MetaTicTacToe (Cloudflare Workers / partyserver). One Durable Object = one match.",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

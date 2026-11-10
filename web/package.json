@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "type": "module",
   "description": "Web client for MetaTicTacToe (Ultimate / Meta Tic-Tac-Toe).",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Shared modern-minimal design tokens for the web and mobile apps.",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

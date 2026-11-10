@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, SafeAreaView, StatusBar, StyleSheet } from 'react-native';

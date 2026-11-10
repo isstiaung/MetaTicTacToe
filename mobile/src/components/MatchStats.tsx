@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { StyleSheet, Text, type TextStyle, View } from 'react-native';
 import type { GameState, Player } from '@mtt/engine';

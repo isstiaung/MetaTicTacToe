@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Pure TypeScript Ultimate / Meta Tic-Tac-Toe rules engine + AI. No UI dependencies.",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": "Sainath Rajagopal <hello@isstiaung.me>",
   "repository": {
     "type": "git",

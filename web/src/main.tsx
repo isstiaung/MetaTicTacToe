@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
